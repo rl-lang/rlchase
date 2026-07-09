@@ -1,6 +1,6 @@
 get println from std::io
 get term_print, term_hide_cursor, term_show_cursor, term_poll, term_move, term_fg, term_bg, term_get_size, term_flush from std::term
-get term_enter, term_clear, term_leave, term_read_key from std::term
+get term_enter, term_clear, term_leave, term_read_key, term_move_right, term_move_left, term_move_up, term_move_down from std::term
 get arr_range, arr_push, arr_remove, arr_contains, arr_first, arr_last, len from std::array
 get repeat, format from std::str
 get mod from std::math
@@ -142,6 +142,61 @@ fn draw_main_menu(int max_x, int max_y) -> (arr[int], arr[int]) {
     return ([box_start_x + 1, box_start_y], [box_exit_x + 1, box_exit_y])
 }
 
+fn game_loop(arr[(int,int)] frame, int max_x, int max_y) {
+    term_clear()
+    draw_border(frame, max_x, max_y)
+
+    term_hide_cursor()
+    dec int prev_x = max_x / 2
+    dec int prev_y = max_y / 2
+
+    term_move(prev_x, prev_y)
+    term_print("@")
+
+    while true {
+        dec string key = term_read_key()?
+        match key {
+            "Up" => {
+                term_move(prev_x , prev_y)
+                term_print(" ")
+                term_move_up(0)
+                term_print("@")
+                prev_y -= 1
+            }
+
+            "Down" => {
+                term_move(prev_x, prev_y)
+                term_print(" ")
+                term_move_down(0)
+                term_print("@")
+                prev_y += 1
+            }
+
+            "Left" => {
+                term_move(prev_x, prev_y)
+                term_print(" ")
+                term_move_left(0)
+                term_print("@")
+                prev_x -= 1
+            }
+
+            "Right" => {
+                term_move(prev_x, prev_y)
+                term_print(" ")
+                term_move_right(0)
+                term_print("@")
+                prev_x += 1
+            }
+
+            "Ctrl:c" => {
+                break
+            }
+        }
+    }
+
+}
+
+
 fn main() {
     dec arr[int] size = term_get_size()?
     dec int max_x, int max_y = (size[0], size[1])
@@ -175,11 +230,17 @@ fn main() {
             "Char: " => {
                 if choice == 2 {
                     running = false
+                } else if choice == 1 {
+                    running = false
+                    game_loop(frame, max_x, max_y)
                 }
             }
             "Enter" => {
                 if choice == 2 {
                     running = false
+                } else if choice == 1 {
+                    running = false
+                    game_loop(frame, max_x, max_y)
                 }
             }
 
