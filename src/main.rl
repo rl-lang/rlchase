@@ -85,12 +85,20 @@ fn draw_border(arr[(int, int)] frame, int max_x, int max_y) {
     }
 }
 
-fn draw_main_menu(int max_x, int max_y) {
+fn draw_main_menu(int max_x, int max_y) -> ((int, int), (int, int)) {
     dec int center_x = max_x / 2
     dec int center_y = max_y / 2
 
     dec string title = " rl game "
     dec arr[string] ft_title, int title_len = frame_this(title)
+
+    dec string start = " start "
+    dec string exit = " exit  "
+    dec string dot = " "
+
+    dec arr[string] ft_start, int start_len = frame_this(start)
+    dec arr[string] ft_exit, int exit_len = frame_this(exit)
+    dec arr[string] ft_dot, int dot_len = frame_this(dot)
 
     term_move(center_x - (title_len / 2), center_y - 1)
     term_print(ft_title[0])
@@ -99,6 +107,39 @@ fn draw_main_menu(int max_x, int max_y) {
     term_move(center_x - (title_len / 2), center_y + 1)
     term_print(ft_title[2])
 
+    term_move(center_x - (start_len), center_y + 3)
+    term_print(ft_start[0])
+    term_move(center_x - (start_len), center_y + 4)
+    term_print(ft_start[1])
+    term_move(center_x - (start_len), center_y + 5)
+    term_print(ft_start[2])
+    // box
+    dec int box_start_x = center_x - start_len - 3
+    dec int box_start_y = center_y + 4
+    term_move(box_start_x, box_start_y - 1)
+    term_print(ft_dot[0])
+    term_move(box_start_x, box_start_y)
+    term_print(ft_dot[1])
+    term_move(box_start_x, box_start_y + 1)
+    term_print(ft_dot[2])
+
+    term_move(center_x - (exit_len), center_y + 6)
+    term_print(ft_exit[0])
+    term_move(center_x - (exit_len), center_y + 7)
+    term_print(ft_exit[1])
+    term_move(center_x - (exit_len), center_y + 8)
+    term_print(ft_exit[2])
+    // box
+    dec int box_exit_x = center_x - exit_len - 3
+    dec int box_exit_y = center_y + 7
+    term_move(box_exit_x, box_exit_y - 1)
+    term_print(ft_dot[0])
+    term_move(box_exit_x, box_exit_y)
+    term_print(ft_dot[1])
+    term_move(box_exit_x, box_exit_y + 1)
+    term_print(ft_dot[2])
+
+    return ((box_start_x, box_start_y), (box_exit_x, box_exit_y))
 }
 
 fn main() {
