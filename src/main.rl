@@ -1,5 +1,126 @@
 get println from std::io
-fn main() {
-    println("hello world")
+get term_print, term_hide_cursor, term_show_cursor, term_poll, term_move, term_fg, term_bg, term_get_size, term_flush from std::term
+get term_enter, term_clear, term_leave from std::term
+get arr_range, arr_push, arr_remove, arr_contains, arr_first, arr_last, len from std::array
+get repeat, format from std::str
+get mod from std::math
+get rand_int, rand_int_range from std::random
+
+!#[test]
+fn tests() {
+    // checks for logic before going to init
+    // mainly for imports
 }
-main()
+
+!#[init]
+fn terminal() {
+    term_enter()
+    term_clear()
+    term_hide_cursor()
+}
+
+fn frame_this(string text) -> (arr[string], int) {
+    dec int text_len = text.len()
+    dec string upper = format("┌{}┐", "─".repeat(text_len))
+    dec string text = format("│{}│", text)
+    dec string lower = format("└{}┘", "─".repeat(text_len))
+
+    return ([upper, text, lower], text_len)
+}
+
+!#[init]
+fn loading() {
+    term_clear()
+
+    dec arr[int] size = term_get_size()?
+    dec int max_x, int max_y = (size[0], size[1])
+
+    dec string loading_msg = " loading ... "
+    dec arr[string] ft, int msg_len = frame_this(loading_msg)
+
+    term_move(max_x - (msg_len + 4) ,max_y - 4)
+    term_print(ft[0])
+    term_move(max_x - (msg_len + 4) ,max_y - 3)
+    term_print(ft[1])
+    term_move(max_x - (msg_len + 4) ,max_y - 2)
+    term_print(ft[2])
+}
+
+fn get_size(int max_x, int max_y) -> (arr[(int, int)], arr[(int, int)]) {
+    dec arr[int] Xs = arr_range(0, max_x + 1, 1)
+    dec arr[int] Ys = arr_range(0, max_y + 1 , 1)
+
+    dec arr[(int, int)] frame = []
+    dec arr[(int, int)] body = []
+
+    for x in Xs {
+        for y in Ys {
+            if x == 0 or y == 0 or x == max_x or y == max_y {
+                frame = frame.arr_push((x, y))
+            } else {
+                body = body.arr_push((x, y))
+            }
+        }
+    }
+
+    return (frame, body)
+}
+
+fn draw_border(arr[(int, int)] frame, int max_x, int max_y) {
+    for point in frame {
+        term_move(point[0], point[1])
+        if point[0] == 0 and point[1] == 0 {
+            term_print("┌")
+        } else if point[0] == max_x and point[1] == 0 {
+            term_print("┐")
+        } else if point[0] == 0 and point[1] == max_y {
+            term_print("└")
+        } else if point[0] == max_x and point[1] == max_y {
+            term_print("┘")
+        } else if point[1] == 0 or point[1] == max_y {
+            term_print("─")
+        } else if point[0] == 0 or point[0] == max_x {
+            term_print("│")
+        }
+    }
+}
+
+fn draw_main_menu(int max_x, int max_y) {
+    dec int center_x = max_x / 2
+    dec int center_y = max_y / 2
+
+    dec string title = " rl game "
+    dec arr[string] ft_title, int title_len = frame_this(title)
+
+    term_move(center_x - (title_len / 2), center_y - 1)
+    term_print(ft_title[0])
+    term_move(center_x - (title_len / 2), center_y)
+    term_print(ft_title[1])
+    term_move(center_x - (title_len / 2), center_y + 1)
+    term_print(ft_title[2])
+
+}
+
+fn main() {
+    dec arr[int] size = term_get_size()?
+    dec int max_x, int max_y = (size[0], size[1])
+
+    dec arr[(int, int)] frame, arr[(int, int)] body = get_size(max_x, max_y)
+
+    term_clear()
+    draw_border(frame, max_x, max_y)
+    draw_main_menu(max_x - 2, max_y - 2)
+
+    while true {
+        if term_poll(0)? {
+            break
+        }
+
+        std::process::sleep(250)
+    }
+}
+
+!#[final]
+fn clean_up() {
+    term_leave()
+}
