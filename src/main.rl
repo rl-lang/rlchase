@@ -1,6 +1,6 @@
 get println from std::io
 get term_print, term_hide_cursor, term_show_cursor, term_poll, term_move, term_fg, term_bg, term_get_size, term_flush from std::term
-get term_enter, term_clear, term_leave from std::term
+get term_enter, term_clear, term_leave, term_read_key from std::term
 get arr_range, arr_push, arr_remove, arr_contains, arr_first, arr_last, len from std::array
 get repeat, format from std::str
 get mod from std::math
@@ -85,7 +85,7 @@ fn draw_border(arr[(int, int)] frame, int max_x, int max_y) {
     }
 }
 
-fn draw_main_menu(int max_x, int max_y) -> ((int, int), (int, int)) {
+fn draw_main_menu(int max_x, int max_y) -> (arr[int], arr[int]) {
     dec int center_x = max_x / 2
     dec int center_y = max_y / 2
 
@@ -139,7 +139,7 @@ fn draw_main_menu(int max_x, int max_y) -> ((int, int), (int, int)) {
     term_move(box_exit_x, box_exit_y + 1)
     term_print(ft_dot[2])
 
-    return ((box_start_x, box_start_y), (box_exit_x, box_exit_y))
+    return ([box_start_x + 1, box_start_y], [box_exit_x + 1, box_exit_y])
 }
 
 fn main() {
@@ -150,14 +150,45 @@ fn main() {
 
     term_clear()
     draw_border(frame, max_x, max_y)
-    draw_main_menu(max_x - 2, max_y - 2)
+    dec arr[int] start_button, arr[int] exit_button = draw_main_menu(max_x - 2, max_y - 2)
 
-    while true {
-        if term_poll(0)? {
-            break
+    dec bool running = true
+    dec int choice = 0
+    while running {
+        dec string key = term_read_key()?
+        term_show_cursor()
+        match key {
+            "Up" => {
+                if choice == 0 or choice == 2 {
+                    term_move(start_button[0], start_button[1])
+                    choice = 1
+                }
+            }
+
+            "Down" => {
+                if choice == 0 or choice == 1 {
+                    term_move(exit_button[0], exit_button[1])
+                    choice = 2
+                }
+            }
+
+            "Char: " => {
+                if choice == 2 {
+                    running = false
+                }
+            }
+            "Enter" => {
+                if choice == 2 {
+                    running = false
+                }
+            }
+
+            "Ctrl:c" => {
+                break
+            }
+
+            _ => {println(key)}
         }
-
-        std::process::sleep(250)
     }
 }
 
