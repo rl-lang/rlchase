@@ -3,7 +3,7 @@ get term_print, term_hide_cursor, term_show_cursor, term_poll, term_move, term_f
 get term_enter, term_clear, term_leave, term_read_key, term_move_right, term_move_left, term_move_up, term_move_down from std::term
 get arr_range, arr_push, arr_remove, arr_contains, arr_first, arr_last, len from std::array
 get repeat, format from std::str
-get mod from std::math
+get mod, clamp from std::math
 get rand_int, rand_int_range from std::random
 
 !#[test]
@@ -147,45 +147,49 @@ fn game_loop(arr[(int,int)] frame, int max_x, int max_y) {
     draw_border(frame, max_x, max_y)
 
     term_hide_cursor()
-    dec int prev_x = max_x / 2
-    dec int prev_y = max_y / 2
+    dec int x = max_x / 2
+    dec int y = max_y / 2
 
-    term_move(prev_x, prev_y)
+    term_move(x, y)
     term_print("@")
 
     while true {
         dec string key = term_read_key()?
         match key {
             "Up" => {
-                term_move(prev_x , prev_y)
+                term_move(x , y)
                 term_print(" ")
-                term_move_up(0)
+                y -= 1
+                y = y.clamp(1, max_y -1)
+                term_move(x , y )
                 term_print("@")
-                prev_y -= 1
             }
 
             "Down" => {
-                term_move(prev_x, prev_y)
+                term_move(x, y)
                 term_print(" ")
-                term_move_down(0)
+                y += 1
+                y = y.clamp(1, max_y -1)
+                term_move(x, y)
                 term_print("@")
-                prev_y += 1
             }
 
             "Left" => {
-                term_move(prev_x, prev_y)
+                term_move(x, y)
                 term_print(" ")
-                term_move_left(0)
+                x -= 1
+                x = x.clamp(1, max_x -1)
+                term_move(x, y)
                 term_print("@")
-                prev_x -= 1
             }
 
             "Right" => {
-                term_move(prev_x, prev_y)
+                term_move(x, y)
                 term_print(" ")
-                term_move_right(0)
+                x += 1
+                x = x.clamp(1, max_x -1)
+                term_move(x, y)
                 term_print("@")
-                prev_x += 1
             }
 
             "Ctrl:c" => {
