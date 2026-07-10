@@ -24,7 +24,8 @@ Dodge wandering hunters, sidestep death tiles, grab pellets, and hunt down the e
 |---|---|
 | Arrow keys | Move |
 | Enter / Space | Confirm menu selection |
-| Ctrl+C | Back to menu / quit |
+| Ctrl+M / M | Back to menu |
+| Ctrl+C | quit |
 
 ## How to play
 

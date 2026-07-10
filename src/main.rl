@@ -72,7 +72,8 @@ record Stats {
 tag GameResult {
     Win,
     Lose,
-    Quit
+    Quit,
+    Menu,
 }
 
 // ---- persistence ----
@@ -804,6 +805,8 @@ fn game_loop(arr[(int,int)] frame, int max_x, int max_y, int level) -> GameResul
                 nx = (p.x + 1).clamp(1, max_x - 2)
                 moved = true
             }
+            "Char:m" => { return GameResult.Menu }
+            "Ctrl:m" => { return GameResult.Menu }
             "Ctrl:c" => { return GameResult.Quit }
             _ => {}
         }
@@ -1048,6 +1051,12 @@ fn main() {
                         in_menu = false
                         transition_sweep(max_x, max_y)
                         dec GameResult gresult = game_loop(frame, max_x, max_y, level)
+
+                        if gresult == GameResult.Quit {
+                            running = false
+                            in_menu = false
+                            break
+                        }
 
                         if gresult == GameResult.Win {
                             stats.games = stats.games + 1
