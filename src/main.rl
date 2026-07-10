@@ -5,7 +5,8 @@ get arr_range, arr_push, arr_remove, arr_contains, arr_first, arr_last, len from
 get repeat, format from std::str
 get mod, clamp from std::math
 get rand_int, rand_int_range from std::random
-get to_string from std::types
+get to_string, to_int from std::types
+get path_exists from std::path
 
 !#[test]
 fn tests() {
@@ -37,6 +38,21 @@ tag GameResult {
     Win,
     Lose,
     Quit
+}
+
+// ---- persistence ----
+
+fn load_best_level() -> int {
+    if path_exists("rlgame.game_data") {
+        dec string content = read_file("rlgame.game_data")?
+        dec int parsed = content.to_int()?
+        return parsed
+    }
+    return 1
+}
+
+fn save_best_level(int level) {
+    write_file("rlgame.game_data", level.to_string()?)?
 }
 
 // ---- ui helpers ----
@@ -107,12 +123,15 @@ fn draw_border(arr[(int, int)] frame, int max_x, int max_y) {
     }
 }
 
-fn draw_main_menu(int max_x, int max_y) -> (arr[int], arr[int]) {
+fn draw_main_menu(int max_x, int max_y, int best_level) -> (arr[int], arr[int]) {
     dec int center_x = max_x / 2
     dec int center_y = max_y / 2
 
     dec string title = " rl game "
     dec arr[string] ft_title, int title_len = frame_this(title)
+
+    dec string best = format(" best level: {} ", best_level.to_string()?)
+    dec arr[string] ft_best, int best_len = frame_this(best)
 
     dec string start = " start "
     dec string exit = " exit  "
@@ -129,15 +148,18 @@ fn draw_main_menu(int max_x, int max_y) -> (arr[int], arr[int]) {
     term_move(center_x - (title_len / 2), center_y + 1)
     term_print(ft_title[2])
 
-    term_move(center_x - (start_len), center_y + 3)
-    term_print(ft_start[0])
+    term_move(center_x - (best_len / 2), center_y + 2)
+    term_print(ft_best[1])
+
     term_move(center_x - (start_len), center_y + 4)
-    term_print(ft_start[1])
+    term_print(ft_start[0])
     term_move(center_x - (start_len), center_y + 5)
+    term_print(ft_start[1])
+    term_move(center_x - (start_len), center_y + 6)
     term_print(ft_start[2])
     // box
     dec int box_start_x = center_x - start_len - 3
-    dec int box_start_y = center_y + 4
+    dec int box_start_y = center_y + 5
     term_move(box_start_x, box_start_y - 1)
     term_print(ft_dot[0])
     term_move(box_start_x, box_start_y)
@@ -145,15 +167,15 @@ fn draw_main_menu(int max_x, int max_y) -> (arr[int], arr[int]) {
     term_move(box_start_x, box_start_y + 1)
     term_print(ft_dot[2])
 
-    term_move(center_x - (exit_len), center_y + 6)
-    term_print(ft_exit[0])
     term_move(center_x - (exit_len), center_y + 7)
-    term_print(ft_exit[1])
+    term_print(ft_exit[0])
     term_move(center_x - (exit_len), center_y + 8)
+    term_print(ft_exit[1])
+    term_move(center_x - (exit_len), center_y + 9)
     term_print(ft_exit[2])
     // box
     dec int box_exit_x = center_x - exit_len - 3
-    dec int box_exit_y = center_y + 7
+    dec int box_exit_y = center_y + 8
     term_move(box_exit_x, box_exit_y - 1)
     term_print(ft_dot[0])
     term_move(box_exit_x, box_exit_y)
@@ -465,11 +487,12 @@ fn main() {
 
     dec bool running = true
     dec int level = 1
+    dec int best_level = load_best_level()
 
     while running {
         term_clear()
         draw_border(frame, max_x, max_y)
-        dec arr[int] start_button, arr[int] exit_button = draw_main_menu(max_x - 2, max_y - 2)
+        dec arr[int] start_button, arr[int] exit_button = draw_main_menu(max_x - 2, max_y - 2, best_level)
 
         dec bool in_menu = true
         dec int choice = 0
