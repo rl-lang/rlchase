@@ -66,7 +66,8 @@ record Stats {
     int best_level,
     int games,
     int wins,
-    int losses
+    int losses,
+    int streak,
 }
 
 tag GameResult {
@@ -104,20 +105,21 @@ fn load_stats() -> Stats {
         dec string content = read_file("rlchase.save")?
         dec arr[string] parts = split(content, ",")
 
-        if parts.len() == 4 {
+        if parts.len() == 5 {
             dec int best = parts[0].to_int()?
             dec int games = parts[1].to_int()?
             dec int wins = parts[2].to_int()?
             dec int losses = parts[3].to_int()?
-            return Stats { best_level: best, games: games, wins: wins, losses: losses }
+            dec int streak = parts[4].to_int()?
+            return Stats { best_level: best, games: games, wins: wins, losses: losses, streak: streak}
         }
     }
 
-    return Stats { best_level: 1, games: 0, wins: 0, losses: 0 }
+    return Stats { best_level: 1, games: 0, wins: 0, losses: 0, streak: 0 }
 }
 
 fn save_stats(Stats s) {
-    dec string line = format("{},{},{},{}", s.best_level.to_string()?, s.games.to_string()?, s.wins.to_string()?, s.losses.to_string()?)
+    dec string line = format("{},{},{},{},{}", s.best_level.to_string()?, s.games.to_string()?, s.wins.to_string()?, s.losses.to_string()?, s.streak.to_string()?)
     write_file("rlchase.save", line)?
 }
 
@@ -258,7 +260,7 @@ fn draw_main_menu(int max_x, int max_y, Stats stats) -> (arr[int], arr[int], arr
     dec string title = " rl chase "
     dec arr[string] ft_title, int title_len = frame_this(title)
 
-    dec string best = format(" best level: {}  |  played: {}  wins: {}  losses: {} ", stats.best_level.to_string()?, stats.games.to_string()?, stats.wins.to_string()?, stats.losses.to_string()?)
+    dec string best = format(" best level: {}  |  played: {}  wins: {}  losses: {} | streak: {} ", stats.best_level.to_string()?, stats.games.to_string()?, stats.wins.to_string()?, stats.losses.to_string()?, stats.streak.to_string()?)
     dec arr[string] ft_best, int best_len = frame_this(best)
 
     dec string start = " start "
@@ -746,7 +748,7 @@ fn draw_hud(int max_x, int max_y, int score, int goal_score, int level, int free
     }
 
     term_fg("white")
-    term_print("(Ctrl+C: menu)")
+    term_print("(Ctrl+M/M: menu)")
     term_reset_color()
 }
 
