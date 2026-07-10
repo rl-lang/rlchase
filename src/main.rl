@@ -28,6 +28,11 @@ record Player {
     int score
 }
 
+record Enemy {
+    int x,
+    int y
+}
+
 tag GameResult {
     Win,
     Lose,
@@ -232,6 +237,63 @@ fn spawn_goal(int max_x, int max_y, arr[(int, int)] walls, arr[(int, int)] dange
     return (gx, gy)
 }
 
+fn spawn_enemies(int max_x, int max_y, int level, arr[(int, int)] walls, arr[(int, int)] danger, int px, int py) -> arr[Enemy] {
+    dec arr[Enemy] enemies = []
+    dec int enemy_count = 1 + (level / 2)
+    dec int placed = 0
+
+    while placed < enemy_count {
+        dec int ex = rand_int_range(1, max_x - 2)
+        dec int ey = rand_int_range(1, max_y - 2)
+        dec bool on_player = ex == px and ey == py
+        dec bool too_close = (ex - px).clamp(-3, 3) == (ex - px) and (ey - py).clamp(-3, 3) == (ey - py)
+
+        if !is_wall(walls, ex, ey) and !is_wall(danger, ex, ey) and !on_player and !too_close {
+            enemies = enemies.arr_push(Enemy { x: ex, y: ey })
+            placed = placed + 1
+        }
+    }
+
+    return enemies
+}
+
+fn move_enemies(arr[Enemy] enemies, arr[(int, int)] walls, int max_x, int max_y) -> arr[Enemy] {
+    dec arr[Enemy] moved = []
+
+    for e in enemies {
+        dec int dir = rand_int_range(0, 3)
+        dec int nx = e.x
+        dec int ny = e.y
+
+        if dir == 0 {
+            ny = (e.y - 1).clamp(1, max_y - 2)
+        } else if dir == 1 {
+            ny = (e.y + 1).clamp(1, max_y - 2)
+        } else if dir == 2 {
+            nx = (e.x - 1).clamp(1, max_x - 2)
+        } else {
+            nx = (e.x + 1).clamp(1, max_x - 2)
+        }
+
+        if is_wall(walls, nx, ny) {
+            moved = moved.arr_push(Enemy { x: e.x, y: e.y })
+        } else {
+            moved = moved.arr_push(Enemy { x: nx, y: ny })
+        }
+    }
+
+    return moved
+}
+
+fn enemy_hit(arr[Enemy] enemies, int px, int py) -> bool {
+    for e in enemies {
+        if e.x == px and e.y == py {
+            return true
+        }
+    }
+    return false
+}
+
 fn draw_walls(arr[(int, int)] walls) {
     for w in walls {
         term_move(w[0], w[1])
@@ -243,6 +305,20 @@ fn draw_danger(arr[(int, int)] danger) {
     for d in danger {
         term_move(d[0], d[1])
         term_print("x")
+    }
+}
+
+fn erase_enemies(arr[Enemy] enemies) {
+    for e in enemies {
+        term_move(e.x, e.y)
+        term_print(" ")
+    }
+}
+
+fn draw_enemies(arr[Enemy] enemies) {
+    for e in enemies {
+        term_move(e.x, e.y)
+        term_print("E")
     }
 }
 
@@ -262,9 +338,11 @@ fn game_loop(arr[(int,int)] frame, int max_x, int max_y, int level) -> GameResul
     dec arr[(int, int)] walls = make_walls(max_x, max_y, level)
     dec int start_x, int start_y = find_start_cell(max_x, max_y, walls)
     dec arr[(int, int)] danger = make_danger(max_x, max_y, level, walls, start_x, start_y)
+    dec arr[Enemy] enemies = spawn_enemies(max_x, max_y, level, walls, danger, start_x, start_y)
 
     draw_walls(walls)
     draw_danger(danger)
+    draw_enemies(enemies)
 
     term_hide_cursor()
     dec Player p = Player { x: start_x, y: start_y, score: 0 }
@@ -281,12 +359,25 @@ fn game_loop(arr[(int,int)] frame, int max_x, int max_y, int level) -> GameResul
         dec string key = term_read_key()?
         dec int nx = p.x
         dec int ny = p.y
+        dec bool moved = false
 
         match key {
-            "Up" => { ny = (p.y - 1).clamp(1, max_y - 2) }
-            "Down" => { ny = (p.y + 1).clamp(1, max_y - 2) }
-            "Left" => { nx = (p.x - 1).clamp(1, max_x - 2) }
-            "Right" => { nx = (p.x + 1).clamp(1, max_x - 2) }
+            "Up" => {
+                ny = (p.y - 1).clamp(1, max_y - 2)
+                moved = true
+            }
+            "Down" => {
+                ny = (p.y + 1).clamp(1, max_y - 2)
+                moved = true
+            }
+            "Left" => {
+                nx = (p.x - 1).clamp(1, max_x - 2)
+                moved = true
+            }
+            "Right" => {
+                nx = (p.x + 1).clamp(1, max_x - 2)
+                moved = true
+            }
             "Ctrl:c" => { return GameResult.Quit }
             _ => {}
         }
@@ -301,6 +392,18 @@ fn game_loop(arr[(int,int)] frame, int max_x, int max_y, int level) -> GameResul
         }
 
         if is_wall(danger, p.x, p.y) {
+            return GameResult.Lose
+        }
+
+        if moved {
+            erase_enemies(enemies)
+            enemies = move_enemies(enemies, walls, max_x, max_y)
+            draw_enemies(enemies)
+            term_move(p.x, p.y)
+            term_print("@")
+        }
+
+        if enemy_hit(enemies, p.x, p.y) {
             return GameResult.Lose
         }
 
