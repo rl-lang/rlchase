@@ -66,19 +66,19 @@ fn load_int_file(string path, int default_val) -> int {
 }
 
 fn load_stats() -> Stats {
-    dec int best = load_int_file("rlgame_best.txt", 1)
-    dec int games = load_int_file("rlgame_games.txt", 0)
-    dec int wins = load_int_file("rlgame_wins.txt", 0)
-    dec int losses = load_int_file("rlgame_losses.txt", 0)
+    dec int best = load_int_file("rlchase_best.txt", 1)
+    dec int games = load_int_file("rlchase_games.txt", 0)
+    dec int wins = load_int_file("rlchase_wins.txt", 0)
+    dec int losses = load_int_file("rlchase_losses.txt", 0)
 
     return Stats { best_level: best, games: games, wins: wins, losses: losses }
 }
 
 fn save_stats(Stats s) {
-    write_file("rlgame_best.txt", s.best_level.to_string()?)?
-    write_file("rlgame_games.txt", s.games.to_string()?)?
-    write_file("rlgame_wins.txt", s.wins.to_string()?)?
-    write_file("rlgame_losses.txt", s.losses.to_string()?)?
+    write_file("rlchase_best.txt", s.best_level.to_string()?)?
+    write_file("rlchase_games.txt", s.games.to_string()?)?
+    write_file("rlchase_wins.txt", s.wins.to_string()?)?
+    write_file("rlchase_losses.txt", s.losses.to_string()?)?
 }
 
 // ---- color helpers ----
@@ -203,7 +203,7 @@ fn draw_main_menu(int max_x, int max_y, Stats stats) -> (arr[int], arr[int]) {
     dec int center_x = max_x / 2
     dec int center_y = max_y / 2
 
-    dec string title = " rl game "
+    dec string title = " rl chase "
     dec arr[string] ft_title, int title_len = frame_this(title)
 
     dec string best = format(" best level: {}  |  played: {}  wins: {}  losses: {} ", stats.best_level.to_string()?, stats.games.to_string()?, stats.wins.to_string()?, stats.losses.to_string()?)
