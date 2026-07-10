@@ -1,4 +1,4 @@
-get println from std::io
+get println, read_file, write_file from std::io
 get term_print, term_hide_cursor, term_show_cursor, term_poll, term_move, term_fg, term_bg, term_get_size, term_flush from std::term
 get term_enter, term_clear, term_leave, term_read_key, term_move_right, term_move_left, term_move_up, term_move_down from std::term
 get arr_range, arr_push, arr_remove, arr_contains, arr_first, arr_last, len from std::array
@@ -30,6 +30,11 @@ record Player {
 }
 
 record Enemy {
+    int x,
+    int y
+}
+
+record Target {
     int x,
     int y
 }
@@ -247,16 +252,64 @@ fn find_start_cell(int max_x, int max_y, arr[(int, int)] walls) -> (int, int) {
     return (cx, cy)
 }
 
-fn spawn_goal(int max_x, int max_y, arr[(int, int)] walls, arr[(int, int)] danger, int px, int py) -> (int, int) {
+fn make_pellets(int max_x, int max_y, arr[(int, int)] walls, arr[(int, int)] danger, int px, int py, int count) -> arr[(int, int)] {
+    dec arr[(int, int)] pellets = []
+    dec int placed = 0
+
+    while placed < count {
+        dec int gx = rand_int_range(1, max_x - 2)
+        dec int gy = rand_int_range(1, max_y - 2)
+        dec bool on_player = gx == px and gy == py
+
+        if !is_wall(walls, gx, gy) and !is_wall(danger, gx, gy) and !is_wall(pellets, gx, gy) and !on_player {
+            pellets = pellets.arr_push((gx, gy))
+            placed = placed + 1
+        }
+    }
+
+    return pellets
+}
+
+fn spawn_one_pellet(int max_x, int max_y, arr[(int, int)] walls, arr[(int, int)] danger, arr[(int, int)] pellets, int px, int py) -> (int, int) {
     dec int gx = rand_int_range(1, max_x - 2)
     dec int gy = rand_int_range(1, max_y - 2)
 
-    while is_wall(walls, gx, gy) or is_wall(danger, gx, gy) or (gx == px and gy == py) {
-        gx = rand_int_range(1, max_x - 1)
-        gy = rand_int_range(1, max_y - 1)
+    while is_wall(walls, gx, gy) or is_wall(danger, gx, gy) or is_wall(pellets, gx, gy) or (gx == px and gy == py) {
+        gx = rand_int_range(1, max_x - 2)
+        gy = rand_int_range(1, max_y - 2)
     }
 
     return (gx, gy)
+}
+
+fn spawn_target(int max_x, int max_y, arr[(int, int)] walls, arr[(int, int)] danger, int px, int py) -> Target {
+    dec int tx = rand_int_range(1, max_x - 2)
+    dec int ty = rand_int_range(1, max_y - 2)
+
+    while is_wall(walls, tx, ty) or is_wall(danger, tx, ty) or (tx == px and ty == py) {
+        tx = rand_int_range(1, max_x - 2)
+        ty = rand_int_range(1, max_y - 2)
+    }
+
+    return Target { x: tx, y: ty }
+}
+
+fn make_powerups(int max_x, int max_y, arr[(int, int)] walls, arr[(int, int)] danger, int px, int py, int count) -> arr[(int, int)] {
+    dec arr[(int, int)] powerups = []
+    dec int placed = 0
+
+    while placed < count {
+        dec int gx = rand_int_range(1, max_x - 2)
+        dec int gy = rand_int_range(1, max_y - 2)
+        dec bool on_player = gx == px and gy == py
+
+        if !is_wall(walls, gx, gy) and !is_wall(danger, gx, gy) and !is_wall(powerups, gx, gy) and !on_player {
+            powerups = powerups.arr_push((gx, gy))
+            placed = placed + 1
+        }
+    }
+
+    return powerups
 }
 
 fn spawn_enemies(int max_x, int max_y, int level, arr[(int, int)] walls, arr[(int, int)] danger, int px, int py) -> arr[Enemy] {
@@ -279,32 +332,105 @@ fn spawn_enemies(int max_x, int max_y, int level, arr[(int, int)] walls, arr[(in
     return enemies
 }
 
-fn move_enemies(arr[Enemy] enemies, arr[(int, int)] walls, int max_x, int max_y) -> arr[Enemy] {
-    dec arr[Enemy] moved = []
+fn random_step(int x, int y, arr[(int, int)] walls, int max_x, int max_y) -> (int, int) {
+    dec int dir = rand_int_range(0, 3)
+    dec int nx = x
+    dec int ny = y
 
-    for e in enemies {
-        dec int dir = rand_int_range(0, 3)
-        dec int nx = e.x
-        dec int ny = e.y
+    if dir == 0 {
+        ny = (y - 1).clamp(1, max_y - 2)
+    } else if dir == 1 {
+        ny = (y + 1).clamp(1, max_y - 2)
+    } else if dir == 2 {
+        nx = (x - 1).clamp(1, max_x - 2)
+    } else {
+        nx = (x + 1).clamp(1, max_x - 2)
+    }
 
-        if dir == 0 {
-            ny = (e.y - 1).clamp(1, max_y - 2)
-        } else if dir == 1 {
-            ny = (e.y + 1).clamp(1, max_y - 2)
-        } else if dir == 2 {
-            nx = (e.x - 1).clamp(1, max_x - 2)
-        } else {
-            nx = (e.x + 1).clamp(1, max_x - 2)
+    if is_wall(walls, nx, ny) {
+        return (x, y)
+    }
+    return (nx, ny)
+}
+
+fn chase_step(int x, int y, int px, int py, arr[(int, int)] walls, int max_x, int max_y) -> (int, int) {
+    dec int dx = px - x
+    dec int dy = py - y
+
+    dec int adx = dx
+    if adx < 0 {
+        adx = 0 - adx
+    }
+    dec int ady = dy
+    if ady < 0 {
+        ady = 0 - ady
+    }
+
+    dec int nx = x
+    dec int ny = y
+
+    if adx >= ady {
+        if dx > 0 {
+            nx = (x + 1).clamp(1, max_x - 2)
+        } else if dx < 0 {
+            nx = (x - 1).clamp(1, max_x - 2)
         }
-
         if is_wall(walls, nx, ny) {
-            moved = moved.arr_push(Enemy { x: e.x, y: e.y })
-        } else {
-            moved = moved.arr_push(Enemy { x: nx, y: ny })
+            nx = x
+            if dy > 0 {
+                ny = (y + 1).clamp(1, max_y - 2)
+            } else if dy < 0 {
+                ny = (y - 1).clamp(1, max_y - 2)
+            }
+        }
+    } else {
+        if dy > 0 {
+            ny = (y + 1).clamp(1, max_y - 2)
+        } else if dy < 0 {
+            ny = (y - 1).clamp(1, max_y - 2)
+        }
+        if is_wall(walls, nx, ny) {
+            ny = y
+            if dx > 0 {
+                nx = (x + 1).clamp(1, max_x - 2)
+            } else if dx < 0 {
+                nx = (x - 1).clamp(1, max_x - 2)
+            }
         }
     }
 
+    if is_wall(walls, nx, ny) {
+        return (x, y)
+    }
+    return (nx, ny)
+}
+
+fn move_enemies(arr[Enemy] enemies, arr[(int, int)] walls, int max_x, int max_y, int px, int py) -> arr[Enemy] {
+    dec arr[Enemy] moved = []
+
+    for e in enemies {
+        dec int roll = rand_int_range(0, 9)
+        dec int nx, int ny = (e.x, e.y)
+
+        if roll < 7 {
+            dec int cx, int cy = chase_step(e.x, e.y, px, py, walls, max_x, max_y)
+            nx = cx
+            ny = cy
+        } else {
+            dec int rx, int ry = random_step(e.x, e.y, walls, max_x, max_y)
+            nx = rx
+            ny = ry
+        }
+
+        moved = moved.arr_push(Enemy { x: nx, y: ny })
+    }
+
     return moved
+}
+
+fn move_target(Target t, arr[(int, int)] walls, int max_x, int max_y) -> Target {
+    dec int nx, int ny = random_step(t.x, t.y, walls, max_x, max_y)
+    return Target { x: nx, y: ny }
 }
 
 fn enemy_hit(arr[Enemy] enemies, int px, int py) -> bool {
@@ -314,6 +440,17 @@ fn enemy_hit(arr[Enemy] enemies, int px, int py) -> bool {
         }
     }
     return false
+}
+
+fn pellet_index(arr[(int, int)] pellets, int px, int py) -> int {
+    dec int i = 0
+    for p in pellets {
+        if p[0] == px and p[1] == py {
+            return i
+        }
+        i = i + 1
+    }
+    return -1
 }
 
 fn draw_walls(arr[(int, int)] walls) {
@@ -327,6 +464,20 @@ fn draw_danger(arr[(int, int)] danger) {
     for d in danger {
         term_move(d[0], d[1])
         term_print("x")
+    }
+}
+
+fn draw_pellets(arr[(int, int)] pellets) {
+    for p in pellets {
+        term_move(p[0], p[1])
+        term_print("o")
+    }
+}
+
+fn draw_powerups(arr[(int, int)] powerups) {
+    for u in powerups {
+        term_move(u[0], u[1])
+        term_print("!")
     }
 }
 
@@ -344,15 +495,31 @@ fn draw_enemies(arr[Enemy] enemies) {
     }
 }
 
-fn draw_hud(int max_x, int max_y, int score, int goal_score, int level) {
+fn draw_target(Target t) {
+    term_move(t.x, t.y)
+    term_print("*")
+}
+
+fn erase_target(Target t) {
+    term_move(t.x, t.y)
+    term_print(" ")
+}
+
+fn draw_hud(int max_x, int max_y, int score, int goal_score, int level, int freeze_timer) {
     term_move(1, max_y + 1)
-    term_print(format("level {}   score: {} / {}   (Ctrl+C to return to menu)   ", level.to_string()?, score.to_string()?, goal_score.to_string()?))
+    if freeze_timer > 0 {
+        term_print(format("level {}   score: {} / {}   FROZEN ({})   (Ctrl+C: menu)   ", level.to_string()?, score.to_string()?, goal_score.to_string()?, freeze_timer.to_string()?))
+    } else {
+        term_print(format("level {}   score: {} / {}   (Ctrl+C: menu)              ", level.to_string()?, score.to_string()?, goal_score.to_string()?))
+    }
 }
 
 // ---- game loop ----
 
 fn game_loop(arr[(int,int)] frame, int max_x, int max_y, int level) -> GameResult {
-    dec int goal_score = 2 + level
+    dec int goal_score = 8 + level * 4
+    dec int pellet_count = 3
+    dec int powerup_count = 2
 
     term_clear()
     draw_border(frame, max_x, max_y)
@@ -361,21 +528,24 @@ fn game_loop(arr[(int,int)] frame, int max_x, int max_y, int level) -> GameResul
     dec int start_x, int start_y = find_start_cell(max_x, max_y, walls)
     dec arr[(int, int)] danger = make_danger(max_x, max_y, level, walls, start_x, start_y)
     dec arr[Enemy] enemies = spawn_enemies(max_x, max_y, level, walls, danger, start_x, start_y)
+    dec arr[(int, int)] pellets = make_pellets(max_x, max_y, walls, danger, start_x, start_y, pellet_count)
+    dec arr[(int, int)] powerups = make_powerups(max_x, max_y, walls, danger, start_x, start_y, powerup_count)
+    dec Target target = spawn_target(max_x, max_y, walls, danger, start_x, start_y)
 
     draw_walls(walls)
     draw_danger(danger)
+    draw_pellets(pellets)
+    draw_powerups(powerups)
+    draw_target(target)
     draw_enemies(enemies)
 
     term_hide_cursor()
     dec Player p = Player { x: start_x, y: start_y, score: 0 }
-
-    dec int goal_x, int goal_y = spawn_goal(max_x, max_y, walls, danger, p.x, p.y)
+    dec int freeze_timer = 0
 
     term_move(p.x, p.y)
     term_print("@")
-    term_move(goal_x, goal_y)
-    term_print("*")
-    draw_hud(max_x, max_y, p.score, goal_score, level)
+    draw_hud(max_x, max_y, p.score, goal_score, level, freeze_timer)
 
     while true {
         dec string key = term_read_key()?
@@ -417,10 +587,52 @@ fn game_loop(arr[(int,int)] frame, int max_x, int max_y, int level) -> GameResul
             return GameResult.Lose
         }
 
+        // pellet pickup
+        dec int hit_pellet = pellet_index(pellets, p.x, p.y)
+        if hit_pellet >= 0 {
+            pellets = pellets.arr_remove(hit_pellet)
+            p.score = p.score + 1
+            dec int new_px, int new_py = spawn_one_pellet(max_x, max_y, walls, danger, pellets, p.x, p.y)
+            pellets = pellets.arr_push((new_px, new_py))
+            term_move(p.x, p.y)
+            term_print("@")
+        }
+
+        // powerup pickup
+        dec int hit_power = pellet_index(powerups, p.x, p.y)
+        if hit_power >= 0 {
+            powerups = powerups.arr_remove(hit_power)
+            freeze_timer = 6
+            term_move(p.x, p.y)
+            term_print("@")
+        }
+
+        // target pickup
+        if p.x == target.x and p.y == target.y {
+            p.score = p.score + 3
+            erase_target(target)
+            target = spawn_target(max_x, max_y, walls, danger, p.x, p.y)
+            term_move(p.x, p.y)
+            term_print("@")
+        }
+
+        if p.score >= goal_score {
+            return GameResult.Win
+        }
+
         if moved {
-            erase_enemies(enemies)
-            enemies = move_enemies(enemies, walls, max_x, max_y)
-            draw_enemies(enemies)
+            if freeze_timer > 0 {
+                freeze_timer = freeze_timer - 1
+            } else {
+                erase_enemies(enemies)
+                enemies = move_enemies(enemies, walls, max_x, max_y, p.x, p.y)
+                draw_enemies(enemies)
+            }
+
+            erase_target(target)
+            target = move_target(target, walls, max_x, max_y)
+            draw_target(target)
+
             term_move(p.x, p.y)
             term_print("@")
         }
@@ -429,21 +641,9 @@ fn game_loop(arr[(int,int)] frame, int max_x, int max_y, int level) -> GameResul
             return GameResult.Lose
         }
 
-        if p.x == goal_x and p.y == goal_y {
-            p.score = p.score + 1
-
-            if p.score >= goal_score {
-                return GameResult.Win
-            }
-
-            dec int new_goal_x, int new_goal_y = spawn_goal(max_x, max_y, walls, danger, p.x, p.y)
-            goal_x = new_goal_x
-            goal_y = new_goal_y
-            term_move(goal_x, goal_y)
-            term_print("*")
-        }
-
-        draw_hud(max_x, max_y, p.score, goal_score, level)
+        draw_pellets(pellets)
+        draw_powerups(powerups)
+        draw_hud(max_x, max_y, p.score, goal_score, level, freeze_timer)
     }
 }
 
@@ -498,9 +698,9 @@ fn main() {
         dec int choice = 0
         while in_menu {
             dec string key = term_read_key()?
-            term_show_cursor()
             match key {
                 "Up" => {
+                    term_show_cursor()
                     if choice == 0 or choice == 2 {
                         term_move(start_button[0], start_button[1])
                         choice = 1
@@ -508,6 +708,7 @@ fn main() {
                 }
 
                 "Down" => {
+                    term_show_cursor()
                     if choice == 0 or choice == 1 {
                         term_move(exit_button[0], exit_button[1])
                         choice = 2
@@ -523,6 +724,10 @@ fn main() {
                         dec GameResult gresult = game_loop(frame, max_x, max_y, level)
                         if gresult == GameResult.Win {
                             level = level + 1
+                            if level > best_level {
+                                best_level = level
+                                save_best_level(best_level)
+                            }
                             show_win_screen(max_x, max_y)
                         } else if gresult == GameResult.Lose {
                             level = 1
@@ -540,6 +745,10 @@ fn main() {
                         dec GameResult gresult = game_loop(frame, max_x, max_y, level)
                         if gresult == GameResult.Win {
                             level = level + 1
+                            if level > best_level {
+                                best_level = level
+                                save_best_level(best_level)
+                            }
                             show_win_screen(max_x, max_y)
                         } else if gresult == GameResult.Lose {
                             level = 1
@@ -553,7 +762,7 @@ fn main() {
                     in_menu = false
                 }
 
-                _ => { }
+                _ => { term_hide_cursor() }
             }
         }
     }
