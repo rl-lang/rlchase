@@ -97,6 +97,12 @@ tag GameResult {
     Menu,
 }
 
+tag DeathCause {
+    None,
+    Danger,
+    Enemy
+}
+
 // ---- persistence ----
 
 !#[init]
@@ -859,10 +865,10 @@ fn draw_player(int x, int y) {
     draw_char_bold(x, y, resolve_symbole(7), "cyan")
 }
 
-fn draw_hud(int max_x, int max_y, int score, int goal_score, int level, int freeze_timer) {
+fn draw_hud(int max_x, int max_y, int score, int goal_score, int level, int freeze_timer, int lives) {
     term_move(1, max_y + 1)
     term_fg("white")
-    term_print(format("level {}   score: {} / {}   ", level.to_string()?, score.to_string()?, goal_score.to_string()?))
+    term_print(format("level {}   score: {} / {}   lives: {}   ", level.to_string()?, score.to_string()?, goal_score.to_string()?, lives.to_string()?))
     term_reset_color()
 
     if freeze_timer > 0 {
@@ -880,11 +886,11 @@ fn draw_hud(int max_x, int max_y, int score, int goal_score, int level, int free
     term_reset_color()
 }
 
-fn draw_boss_hud(int max_x, int max_y, int moves_survived, int moves_needed, int level, int freeze_timer) {
+fn draw_boss_hud(int max_x, int max_y, int moves_survived, int moves_needed, int level, int freeze_timer, int lives) {
     term_move(1, max_y + 1)
     term_fg("red")
     term_bold()
-    term_print(format("BOSS LEVEL {}   survive: {} / {}   ", level.to_string()?, moves_survived.to_string()?, moves_needed.to_string()?))
+    term_print(format("BOSS LEVEL {}   survive: {} / {}   lives: {}   ", level.to_string()?, moves_survived.to_string()?, moves_needed.to_string()?, lives.to_string()?))
     term_reset_attr()
     term_reset_color()
 
@@ -933,13 +939,14 @@ fn show_boss_banner(int max_x, int max_y, int level) {
 
 // ---- game loop ----
 
-fn game_loop(arr[(int,int)] frame, int max_x, int max_y, int level) -> GameResult {
+fn game_loop(arr[(int,int)] frame, int max_x, int max_y, int level) -> (GameResult, DeathCause) {
     dec bool boss_level = is_boss_level(level)
     dec int goal_score = 8 + level * 4
     dec int pellet_count = 3
     dec int powerup_count = 2
     dec int boss_moves_needed = 15 + level
     dec int moves_survived = 0
+    dec int lives = 3
 
     term_hide_cursor()
     randomize_floor_color()
@@ -987,9 +994,9 @@ fn game_loop(arr[(int,int)] frame, int max_x, int max_y, int level) -> GameResul
 
     draw_player(p.x, p.y)
     if boss_level {
-        draw_boss_hud(max_x, max_y, moves_survived, boss_moves_needed, level, freeze_timer)
+        draw_boss_hud(max_x, max_y, moves_survived, boss_moves_needed, level, freeze_timer, lives)
     } else {
-        draw_hud(max_x, max_y, p.score, goal_score, level, freeze_timer)
+        draw_hud(max_x, max_y, p.score, goal_score, level, freeze_timer, lives)
     }
 
     while true {
@@ -1015,9 +1022,9 @@ fn game_loop(arr[(int,int)] frame, int max_x, int max_y, int level) -> GameResul
                 nx = (p.x + 1).clamp(1, max_x - 2)
                 moved = true
             }
-            "Char:m" => { return GameResult.Menu }
-            "Ctrl:m" => { return GameResult.Menu }
-            "Ctrl:c" => { return GameResult.Quit }
+            "Char:m" => { return (GameResult.Menu, DeathCause.None) }
+            "Ctrl:m" => { return (GameResult.Menu, DeathCause.None) }
+            "Ctrl:c" => { return (GameResult.Quit, DeathCause.None) }
             _ => {}
         }
 
@@ -1029,7 +1036,19 @@ fn game_loop(arr[(int,int)] frame, int max_x, int max_y, int level) -> GameResul
         }
 
         if is_wall(danger, p.x, p.y) {
-            return GameResult.Lose
+            lives -= 1
+            if lives <= 0 {
+                return (GameResult.Lose, DeathCause.Danger)
+            }
+            erase_char(p.x, p.y, true)
+            p.x = start_x
+            p.y = start_y
+            draw_player(p.x, p.y)
+            if boss_level {
+                draw_boss_hud(max_x, max_y, moves_survived, boss_moves_needed, level, freeze_timer, lives)
+            } else {
+                draw_hud(max_x, max_y, p.score, goal_score, level, freeze_timer, lives)
+            }
         }
 
         // pellet pickup
@@ -1059,7 +1078,7 @@ fn game_loop(arr[(int,int)] frame, int max_x, int max_y, int level) -> GameResul
         }
 
         if !boss_level and p.score >= goal_score {
-            return GameResult.Win
+            return (GameResult.Win, DeathCause.None)
         }
 
         if moved {
@@ -1094,23 +1113,35 @@ fn game_loop(arr[(int,int)] frame, int max_x, int max_y, int level) -> GameResul
         }
 
         if enemy_hit(enemies, p.x, p.y) {
-            return GameResult.Lose
+            lives -= 1
+            if lives <= 0 {
+                return (GameResult.Lose, DeathCause.Enemy)
+            }
+            erase_char(p.x, p.y, true)
+            p.x = start_x
+            p.y = start_y
+            draw_player(p.x, p.y)
+            if boss_level {
+                draw_boss_hud(max_x, max_y, moves_survived, boss_moves_needed, level, freeze_timer, lives)
+            } else {
+                draw_hud(max_x, max_y, p.score, goal_score, level, freeze_timer, lives)
+            }
         }
 
         if !boss_level and p.score >= goal_score {
-            return GameResult.Win
+            return (GameResult.Win, DeathCause.None)
         }
 
         if boss_level and moves_survived >= boss_moves_needed {
-            return GameResult.Win
+            return (GameResult.Win, DeathCause.None)
         }
 
         draw_pellets(pellets)
         draw_powerups(powerups)
         if boss_level {
-            draw_boss_hud(max_x, max_y, moves_survived, boss_moves_needed, level, freeze_timer)
+            draw_boss_hud(max_x, max_y, moves_survived, boss_moves_needed, level, freeze_timer, lives)
         } else {
-            draw_hud(max_x, max_y, p.score, goal_score, level, freeze_timer)
+            draw_hud(max_x, max_y, p.score, goal_score, level, freeze_timer, lives)
         }
     }
 }
@@ -1136,12 +1167,18 @@ fn show_win_screen(int max_x, int max_y, int level) {
     term_read_key()?
 }
 
-fn show_lose_screen(int max_x, int max_y, int level) {
+fn show_lose_screen(int max_x, int max_y, int level, DeathCause dcause) {
     term_clear()
     dec int center_x = max_x / 2
     dec int center_y = max_y / 2
 
-    dec string msg = format(" you died on level {}! press any key ", level.to_string()?)
+    dec string dmsg = "you died"
+    match dcause {
+        DeathCause.Danger => { dmsg = "you stepped on a danger tile" }
+        DeathCause.Enemy => { dmsg = "you were caught" }
+    }
+
+    dec string msg = format(" {} on level {}! press any key ", dmsg, level.to_string()?)
     dec arr[string] ft, int msg_len = frame_this(msg)
     term_move(center_x - (msg_len / 2), center_y - 1)
     term_fg("red")
@@ -1259,7 +1296,7 @@ fn main() {
                         if is_boss_level(level) {
                             show_boss_banner(max_x, max_y, level)
                         }
-                        dec GameResult gresult = game_loop(frame, max_x, max_y, level)
+                        dec GameResult gresult, DeathCause dcause = game_loop(frame, max_x, max_y, level)
 
                         if gresult == GameResult.Win {
                             stats.games = stats.games + 1
@@ -1276,7 +1313,7 @@ fn main() {
                             stats.losses = stats.losses + 1
                             save_stats(stats)
                             transition_sweep(max_x, max_y)
-                            show_lose_screen(max_x, max_y, level)
+                            show_lose_screen(max_x, max_y, level, dcause)
                             level = 1
                         }
                         // Quit falls back to the menu keeping the current level, no stats change
@@ -1293,7 +1330,7 @@ fn main() {
                         if is_boss_level(level) {
                             show_boss_banner(max_x, max_y, level)
                         }
-                        dec GameResult gresult = game_loop(frame, max_x, max_y, level)
+                        dec GameResult gresult, DeathCause dcause = game_loop(frame, max_x, max_y, level)
 
                         if gresult == GameResult.Quit {
                             running = false
@@ -1316,7 +1353,7 @@ fn main() {
                             stats.losses = stats.losses + 1
                             save_stats(stats)
                             transition_sweep(max_x, max_y)
-                            show_lose_screen(max_x, max_y, level)
+                            show_lose_screen(max_x, max_y, level, dcause)
                             level = 1
                         }
                         transition_sweep(max_x, max_y)
