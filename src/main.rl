@@ -785,16 +785,20 @@ fn move_enemies(arr[Enemy] enemies, arr[(int, int)] walls, int max_x, int max_y,
                 ny = ry
             }
             EnemyType.Interceptor => {
-                if roll < 9 {
+                dec int cooldown = e.timer
+                if cooldown <= 0 {
                     dec int cx1, int cy1 = chase_step(e.x, e.y, px, py, walls, max_x, max_y)
                     dec int cx2, int cy2 = chase_step(cx1, cy1, px, py, walls, max_x, max_y)
                     nx = cx2
                     ny = cy2
+                    cooldown = 4
                 } else {
-                    dec int rx, int ry = random_step(e.x, e.y, walls, max_x, max_y)
-                    nx = rx
-                    ny = ry
+                    dec int cx, int cy = chase_step(e.x, e.y, px, py, walls, max_x, max_y)
+                    nx = cx
+                    ny = cy
+                    cooldown = cooldown - 1
                 }
+                new_timer = cooldown
             }
             EnemyType.Sentinel => {
                 dec int dx = px - e.x
