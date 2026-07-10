@@ -24,6 +24,13 @@ dec bool texpl = false
 CONST arr[string] SYMBOLES_1 = ["┌", "┐", "└", "┘", "─", "│", "#", "@", "E", "C", "e", "x", "o", "!", "*", "█", "☠", ","]
 CONST arr[string] SYMBOLES_2 = ["╭", "╮", "╰", "╯", "─", "│", "▓", "⬢", "⎔", "⌺", "⍵", "✜", "•", "◇", "✦", "░", "⚔", "‧"]
 
+fn resolve_symbole(int n) -> string {
+    if texpl {
+        return SYMBOLES_2[n]
+    } else {
+        return SYMBOLES_1[n]
+    }
+}
 // --- globals end ---
 
 !#[test]
@@ -146,7 +153,11 @@ fn draw_char_bold(int x, int y, string ch, string color) {
 
 fn erase_char(int x, int y) {
     term_move(x, y)
-    term_print(" ")
+    term_dim()
+    term_fg("blue")
+    term_print(resolve_symbole(17)
+    term_reset_attr()
+    term_reset_color()
 }
 
 fn draw_char_boss(int x, int y, string ch) {
@@ -159,9 +170,21 @@ fn draw_char_boss(int x, int y, string ch) {
     term_reset_color()
 }
 
+fn draw_floor(arr[(int, int)] body) {
+    term_dim()
+    term_fg("blue")
+    for c in body {
+        term_move(c[0], c[1])
+        term_print(resolve_symbole(17)
+    }
+    term_reset_attr()
+    term_reset_color()
+}
+
 // ---- transition animation ----
 
 fn transition_sweep(int max_x, int max_y) {
+    term_hide_cursor()
     dec int x = 1
     while x < max_x {
         term_begin_sync()
@@ -187,14 +210,6 @@ fn transition_sweep(int max_x, int max_y) {
 }
 
 // ---- ui helpers ----
-
-fn resolve_symbole(int n) -> string {
-    if texpl {
-        return SYMBOLES_2[n]
-    } else {
-        return SYMBOLES_1[n]
-    }
-}
 
 fn frame_this(string text) -> (arr[string], int) {
     dec int text_len = text.len()
@@ -898,8 +913,11 @@ fn game_loop(arr[(int,int)] frame, int max_x, int max_y, int level) -> GameResul
     dec int boss_moves_needed = 15 + level
     dec int moves_survived = 0
 
-    term_clear()
+    term_hide_cursor()
+    loading()
     draw_border(frame, max_x, max_y)
+    dec arr[(int, int)] frame2, arr[(int,int)] body = get_size(max_x -1, max_y -1)
+    draw_floor(body)
 
     dec arr[(int, int)] walls = []
     dec arr[(int, int)] danger = []
