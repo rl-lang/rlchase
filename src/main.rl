@@ -20,8 +20,9 @@ dec bool texpl = false
 // 11-14: Items/Hazards (Danger, Pellet, Powerup, Moving Target)
 // 15: Screen Transitions (Sweep)
 // 16: Boss Enemy
-CONST arr[string] SYMBOLES_1 = ["┌", "┐", "└", "┘", "─", "│", "#", "@", "E", "C", "e", "x", "o", "!", "*", "█", "☠"]
-CONST arr[string] SYMBOLES_2 = ["╭", "╮", "╰", "╯", "─", "│", "▓", "⬢", "⎔", "⌺", "⍵", "✜", "•", "◇", "✦", "░", "⚔"]
+// 17: Floor
+CONST arr[string] SYMBOLES_1 = ["┌", "┐", "└", "┘", "─", "│", "#", "@", "E", "C", "e", "x", "o", "!", "*", "█", "☠", ","]
+CONST arr[string] SYMBOLES_2 = ["╭", "╮", "╰", "╯", "─", "│", "▓", "⬢", "⎔", "⌺", "⍵", "✜", "•", "◇", "✦", "░", "⚔", "‧"]
 
 // --- globals end ---
 
