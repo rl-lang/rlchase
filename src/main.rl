@@ -1,7 +1,7 @@
 get println, read_file, write_file from std::io
 get term_print, term_hide_cursor, term_show_cursor, term_poll, term_move, term_fg, term_bg, term_get_size, term_flush from std::term
 get term_enter, term_clear, term_leave, term_read_key, term_move_right, term_move_left, term_move_up, term_move_down from std::term
-get term_bold, term_reset_attr, term_reset_color, term_begin_sync, term_end_sync, term_dim from std::term
+get term_bold, term_reset_attr, term_reset_color, term_begin_sync, term_end_sync, term_dim, term_blink from std::term
 get arr_range, arr_push, arr_remove, arr_contains, arr_first, arr_last, len from std::array
 get repeat, format, split from std::str
 get mod, clamp from std::math
@@ -19,8 +19,9 @@ dec bool texpl = false
 // 6-10: Entities (Wall, Player, Normal Enemy, Chaser Enemy, Wanderer Enemy)
 // 11-14: Items/Hazards (Danger, Pellet, Powerup, Moving Target)
 // 15: Screen Transitions (Sweep)
-CONST arr[string] SYMBOLES_1 = ["┌", "┐", "└", "┘", "─", "│", "#", "@", "E", "C", "e", "x", "o", "!", "*", "█"]
-CONST arr[string] SYMBOLES_2 = ["╭", "╮", "╰", "╯", "─", "│", "▓", "⬢", "⎔", "⌺", "⍵", "✜", "•", "◇", "✦", "░"]
+// 16: Boss Enemy
+CONST arr[string] SYMBOLES_1 = ["┌", "┐", "└", "┘", "─", "│", "#", "@", "E", "C", "e", "x", "o", "!", "*", "█", "☠"]
+CONST arr[string] SYMBOLES_2 = ["╭", "╮", "╰", "╯", "─", "│", "▓", "⬢", "⎔", "⌺", "⍵", "✜", "•", "◇", "✦", "░", "⚔"]
 
 // --- globals end ---
 
@@ -48,7 +49,8 @@ record Player {
 tag EnemyType {
     Normal,
     Chaser,
-    Wanderer
+    Wanderer,
+    Boss
 }
 
 record Enemy {
@@ -144,6 +146,16 @@ fn draw_char_bold(int x, int y, string ch, string color) {
 fn erase_char(int x, int y) {
     term_move(x, y)
     term_print(" ")
+}
+
+fn draw_char_boss(int x, int y, string ch) {
+    term_move(x, y)
+    term_fg("red")
+    term_bold()
+    term_blink()
+    term_print(ch)
+    term_reset_attr()
+    term_reset_color()
 }
 
 // ---- transition animation ----
@@ -355,9 +367,9 @@ fn draw_main_menu(int max_x, int max_y, Stats stats) -> (arr[int], arr[int], arr
     term_reset_color()
 
     // in-game legend
-    dec string legend2 = format("{} you   {}, {}, {} enemy   {} danger   {} wall   {} pellet   {} freeze   {} bonus",
+    dec string legend2 = format("{} you   {}, {}, {} enemy   {} boss (every 5th level)   {} danger   {} wall   {} pellet   {} freeze   {} bonus",
         resolve_symbole(7), resolve_symbole(8), resolve_symbole(9), resolve_symbole(10),
-        resolve_symbole(11), resolve_symbole(6), resolve_symbole(12), resolve_symbole(13), resolve_symbole(14))
+        resolve_symbole(16), resolve_symbole(11), resolve_symbole(6), resolve_symbole(12), resolve_symbole(13), resolve_symbole(14))
     term_move(center_x - (legend2.len() / 2) + 5, max_y - 1)
     term_fg("white")
     term_print(legend2)
@@ -544,6 +556,65 @@ fn spawn_enemies(int max_x, int max_y, int level, arr[(int, int)] walls, arr[(in
     return enemies
 }
 
+// ---- boss level helpers ----
+
+fn is_boss_level(int level) -> bool {
+    return mod(level, 5) == 0
+}
+
+fn make_boss_arena_walls(int max_x, int max_y) -> arr[(int, int)] {
+    dec arr[(int, int)] walls = []
+    dec int pillar_count = 6
+    dec int placed = 0
+    dec int attempts = 0
+    dec int max_attempts = 400
+
+    while placed < pillar_count and attempts < max_attempts {
+        dec int wx = rand_int_range(1, max_x - 2)
+        dec int wy = rand_int_range(1, max_y - 2)
+        dec bool is_center = wx == max_x / 2 and wy == max_y / 2
+
+        if !is_wall(walls, wx, wy) and !is_center {
+            walls = walls.arr_push((wx, wy))
+            placed = placed + 1
+        }
+        attempts = attempts + 1
+    }
+
+    return walls
+}
+
+fn spawn_boss(int max_x, int max_y, arr[(int, int)] walls, int px, int py) -> Enemy {
+    dec int min_dist = ((max_x + max_y) / 4).clamp(4, 200)
+    dec int bx = rand_int_range(1, max_x - 2)
+    dec int by = rand_int_range(1, max_y - 2)
+    dec int attempts = 0
+
+    while attempts < 500 {
+        dec int dx = bx - px
+        dec int dy = by - py
+        dec int adx = dx
+        if adx < 0 {
+            adx = 0 - adx
+        }
+        dec int ady = dy
+        if ady < 0 {
+            ady = 0 - ady
+        }
+        dec bool far_enough = (adx + ady) >= min_dist
+
+        if !is_wall(walls, bx, by) and far_enough {
+            return Enemy { x: bx, y: by, type: EnemyType.Boss }
+        }
+
+        bx = rand_int_range(1, max_x - 2)
+        by = rand_int_range(1, max_y - 2)
+        attempts = attempts + 1
+    }
+
+    return Enemy { x: bx, y: by, type: EnemyType.Boss }
+}
+
 fn random_step(int x, int y, arr[(int, int)] walls, int max_x, int max_y) -> (int, int) {
     dec int dir = rand_int_range(0, 3)
     dec int nx = x
@@ -617,6 +688,12 @@ fn chase_step(int x, int y, int px, int py, arr[(int, int)] walls, int max_x, in
     return (nx, ny)
 }
 
+fn move_boss(Enemy boss, arr[(int, int)] walls, int max_x, int max_y, int px, int py) -> Enemy {
+    dec int x1, int y1 = chase_step(boss.x, boss.y, px, py, walls, max_x, max_y)
+    dec int x2, int y2 = chase_step(x1, y1, px, py, walls, max_x, max_y)
+    return Enemy { x: x2, y: y2, type: EnemyType.Boss }
+}
+
 fn move_enemies(arr[Enemy] enemies, arr[(int, int)] walls, int max_x, int max_y, int px, int py) -> arr[Enemy] {
     dec arr[Enemy] moved = []
 
@@ -626,7 +703,7 @@ fn move_enemies(arr[Enemy] enemies, arr[(int, int)] walls, int max_x, int max_y,
 
         match e.type {
             EnemyType.Normal => {
-                if roll < 7 {
+                if roll < 6 {
                     dec int cx, int cy = chase_step(e.x, e.y, px, py, walls, max_x, max_y)
                     nx = cx
                     ny = cy
@@ -637,9 +714,15 @@ fn move_enemies(arr[Enemy] enemies, arr[(int, int)] walls, int max_x, int max_y,
                 }
             }
             EnemyType.Chaser => {
-                dec int cx, int cy = chase_step(e.x, e.y, px, py, walls, max_x, max_y)
-                nx = cx
-                ny = cy
+                if roll < 8 {
+                    dec int cx, int cy = chase_step(e.x, e.y, px, py, walls, max_x, max_y)
+                    nx = cx
+                    ny = cy
+                } else {
+                    dec int rx, int ry = random_step(e.x, e.y, walls, max_x, max_y)
+                    nx = rx
+                    ny = ry
+                }
             }
             EnemyType.Wanderer => {
                 dec int rx, int ry = random_step(e.x, e.y, walls, max_x, max_y)
@@ -715,6 +798,7 @@ fn draw_enemies(arr[Enemy] enemies) {
             EnemyType.Normal => { draw_char_bold(e.x, e.y, resolve_symbole(8), "red") }
             EnemyType.Chaser => { draw_char_bold(e.x, e.y, resolve_symbole(9), "red") }
             EnemyType.Wanderer => { draw_char_bold(e.x, e.y, resolve_symbole(10), "red") }
+            EnemyType.Boss => { draw_char_boss(e.x, e.y, resolve_symbole(16)) }
         }
     }
 }
@@ -748,24 +832,96 @@ fn draw_hud(int max_x, int max_y, int score, int goal_score, int level, int free
     }
 
     term_fg("white")
-    term_print("(Ctrl+M/M: menu)")
+    term_print("(Ctrl+M: menu)")
     term_reset_color()
+}
+
+fn draw_boss_hud(int max_x, int max_y, int moves_survived, int moves_needed, int level, int freeze_timer) {
+    term_move(1, max_y + 1)
+    term_fg("red")
+    term_bold()
+    term_print(format("BOSS LEVEL {}   survive: {} / {}   ", level.to_string()?, moves_survived.to_string()?, moves_needed.to_string()?))
+    term_reset_attr()
+    term_reset_color()
+
+    if freeze_timer > 0 {
+        term_fg("blue")
+        term_bold()
+        term_print(format("FROZEN ({})   ", freeze_timer.to_string()?))
+        term_reset_attr()
+        term_reset_color()
+    } else {
+        term_print("             ")
+    }
+
+    term_fg("white")
+    term_print("(Ctrl+M: menu)")
+    term_reset_color()
+}
+
+fn show_boss_banner(int max_x, int max_y, int level) {
+    term_clear()
+    dec int center_x = max_x / 2
+    dec int center_y = max_y / 2
+
+    dec string msg = format(" ! boss level {} ! ", level.to_string()?)
+    dec arr[string] ft, int msg_len = frame_this(msg)
+    term_move(center_x - (msg_len / 2), center_y - 2)
+    term_fg("red")
+    term_bold()
+    term_blink()
+    term_print(ft[0])
+    term_move(center_x - (msg_len / 2), center_y - 1)
+    term_print(ft[1])
+    term_move(center_x - (msg_len / 2), center_y)
+    term_print(ft[2])
+    term_reset_attr()
+    term_reset_color()
+
+    dec string sub = "a relentless hunter is coming. survive the arena. press any key."
+    term_move(center_x - (sub.len() / 2), center_y + 2)
+    term_fg("white")
+    term_print(sub)
+    term_reset_color()
+
+    term_read_key()?
 }
 
 // ---- game loop ----
 
 fn game_loop(arr[(int,int)] frame, int max_x, int max_y, int level) -> GameResult {
+    dec bool boss_level = is_boss_level(level)
     dec int goal_score = 8 + level * 4
     dec int pellet_count = 3
     dec int powerup_count = 2
+    dec int boss_moves_needed = 15 + level
+    dec int moves_survived = 0
 
     term_clear()
     draw_border(frame, max_x, max_y)
 
-    dec arr[(int, int)] walls = make_walls(max_x, max_y, level)
-    dec int start_x, int start_y = find_start_cell(max_x, max_y, walls)
-    dec arr[(int, int)] danger = make_danger(max_x, max_y, level, walls, start_x, start_y)
-    dec arr[Enemy] enemies = spawn_enemies(max_x, max_y, level, walls, danger, start_x, start_y)
+    dec arr[(int, int)] walls = []
+    dec arr[(int, int)] danger = []
+    dec int start_x = max_x / 2
+    dec int start_y = max_y / 2
+    dec arr[Enemy] enemies = []
+
+    if boss_level {
+        walls = make_boss_arena_walls(max_x, max_y)
+        dec int sx, int sy = find_start_cell(max_x, max_y, walls)
+        start_x = sx
+        start_y = sy
+        dec Enemy boss = spawn_boss(max_x, max_y, walls, start_x, start_y)
+        enemies = enemies.arr_push(boss)
+    } else {
+        walls = make_walls(max_x, max_y, level)
+        dec int sx, int sy = find_start_cell(max_x, max_y, walls)
+        start_x = sx
+        start_y = sy
+        danger = make_danger(max_x, max_y, level, walls, start_x, start_y)
+        enemies = spawn_enemies(max_x, max_y, level, walls, danger, start_x, start_y)
+    }
+
     dec arr[(int, int)] pellets = make_pellets(max_x, max_y, walls, danger, start_x, start_y, pellet_count)
     dec arr[(int, int)] powerups = make_powerups(max_x, max_y, walls, danger, start_x, start_y, powerup_count)
     dec Target target = spawn_target(max_x, max_y, walls, danger, start_x, start_y)
@@ -782,7 +938,11 @@ fn game_loop(arr[(int,int)] frame, int max_x, int max_y, int level) -> GameResul
     dec int freeze_timer = 0
 
     draw_player(p.x, p.y)
-    draw_hud(max_x, max_y, p.score, goal_score, level, freeze_timer)
+    if boss_level {
+        draw_boss_hud(max_x, max_y, moves_survived, boss_moves_needed, level, freeze_timer)
+    } else {
+        draw_hud(max_x, max_y, p.score, goal_score, level, freeze_timer)
+    }
 
     while true {
         dec string key = term_read_key()?
@@ -850,13 +1010,18 @@ fn game_loop(arr[(int,int)] frame, int max_x, int max_y, int level) -> GameResul
             draw_player(p.x, p.y)
         }
 
-        if p.score >= goal_score {
+        if !boss_level and p.score >= goal_score {
             return GameResult.Win
         }
 
         if moved {
             if freeze_timer > 0 {
                 freeze_timer = freeze_timer - 1
+            } else if boss_level {
+                erase_enemies(enemies)
+                dec Enemy moved_boss = move_boss(enemies[0], walls, max_x, max_y, p.x, p.y)
+                enemies = [moved_boss]
+                draw_enemies(enemies)
             } else {
                 erase_enemies(enemies)
                 enemies = move_enemies(enemies, walls, max_x, max_y, p.x, p.y)
@@ -865,18 +1030,40 @@ fn game_loop(arr[(int,int)] frame, int max_x, int max_y, int level) -> GameResul
 
             erase_target(target)
             target = move_target(target, walls, max_x, max_y)
+
+            if p.x == target.x and p.y == target.y {
+                p.score = p.score + 3
+                target = spawn_target(max_x, max_y, walls, danger, p.x, p.y)
+            }
+
             draw_target(target)
 
             draw_player(p.x, p.y)
+
+            if boss_level and freeze_timer == 0 {
+                moves_survived = moves_survived + 1
+            }
         }
 
         if enemy_hit(enemies, p.x, p.y) {
             return GameResult.Lose
         }
 
+        if !boss_level and p.score >= goal_score {
+            return GameResult.Win
+        }
+
+        if boss_level and moves_survived >= boss_moves_needed {
+            return GameResult.Win
+        }
+
         draw_pellets(pellets)
         draw_powerups(powerups)
-        draw_hud(max_x, max_y, p.score, goal_score, level, freeze_timer)
+        if boss_level {
+            draw_boss_hud(max_x, max_y, moves_survived, boss_moves_needed, level, freeze_timer)
+        } else {
+            draw_hud(max_x, max_y, p.score, goal_score, level, freeze_timer)
+        }
     }
 }
 
@@ -1021,6 +1208,9 @@ fn main() {
                     } else if (choice == 1) and menu == 1 {
                         in_menu = false
                         transition_sweep(max_x, max_y)
+                        if is_boss_level(level) {
+                            show_boss_banner(max_x, max_y, level)
+                        }
                         dec GameResult gresult = game_loop(frame, max_x, max_y, level)
 
                         if gresult == GameResult.Win {
@@ -1052,6 +1242,9 @@ fn main() {
                     } else if choice == 1 {
                         in_menu = false
                         transition_sweep(max_x, max_y)
+                        if is_boss_level(level) {
+                            show_boss_banner(max_x, max_y, level)
+                        }
                         dec GameResult gresult = game_loop(frame, max_x, max_y, level)
 
                         if gresult == GameResult.Quit {
