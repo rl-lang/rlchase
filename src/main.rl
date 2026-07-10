@@ -161,12 +161,16 @@ fn draw_char_bold(int x, int y, string ch, string color) {
     term_reset_color()
 }
 
-fn erase_char(int x, int y) {
+fn erase_char(int x, int y, bool floor) {
     term_move(x, y)
     term_dim()
     dec int r, int b, int g = FLOOR_COLORS[floor_color]
     term_set_fg(r, b, g)
-    term_print(resolve_symbole(17)
+    if floor {
+        term_print(resolve_symbole(17)
+    } else {
+        term_print(" ")
+    }
     term_reset_attr()
     term_reset_color()
 }
@@ -198,10 +202,10 @@ fn draw_floor(arr[(int, int)] body) {
 fn transition_sweep(int max_x, int max_y) {
     term_hide_cursor()
     dec int x = 1
-    while x < max_x {
+    while x < max_x - 1 {
         term_begin_sync()
         dec int y = 1
-        while y < max_y {
+        while y < max_y - 1 {
             term_move(x, y)
             term_fg("blue")
             term_dim()
@@ -212,6 +216,18 @@ fn transition_sweep(int max_x, int max_y) {
             }
             term_reset_attr()
             term_reset_color()
+            y += 1
+        }
+        term_end_sync()
+        term_poll(4)
+        x += 1
+    }
+    x = 1
+    while x < max_x -1 {
+        term_begin_sync()
+        dec int y = 1
+        while y < max_y - 1 {
+            erase_char(x, y, false)
             y += 1
         }
         term_end_sync()
@@ -816,7 +832,7 @@ fn draw_powerups(arr[(int, int)] powerups) {
 
 fn erase_enemies(arr[Enemy] enemies) {
     for e in enemies {
-        erase_char(e.x, e.y)
+        erase_char(e.x, e.y, true)
     }
 }
 
@@ -836,7 +852,7 @@ fn draw_target(Target t) {
 }
 
 fn erase_target(Target t) {
-    erase_char(t.x, t.y)
+    erase_char(t.x, t.y, true)
 }
 
 fn draw_player(int x, int y) {
@@ -1006,7 +1022,7 @@ fn game_loop(arr[(int,int)] frame, int max_x, int max_y, int level) -> GameResul
         }
 
         if !is_wall(walls, nx, ny) {
-            erase_char(p.x, p.y)
+            erase_char(p.x, p.y, true)
             p.x = nx
             p.y = ny
             draw_player(p.x, p.y)
