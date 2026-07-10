@@ -21,8 +21,8 @@ dec bool texpl = false
 // 15: Screen Transitions (Sweep)
 // 16: Boss Enemy
 // 17: Floor
-CONST arr[string] SYMBOLES_1 = ["┌", "┐", "└", "┘", "─", "│", "#", "@", "E", "C", "e", "x", "o", "!", "*", "█", "☠", ","]
-CONST arr[string] SYMBOLES_2 = ["╭", "╮", "╰", "╯", "─", "│", "▓", "⬢", "⎔", "⌺", "⍵", "✜", "•", "◇", "✦", "░", "⚔", "‧"]
+CONST arr[string] SYMBOLES_1 = ["┌", "┐", "└", "┘", "─", "│", "#", "@", "E", "C", "e", "x", "o", "!", "*", "█", "☠", ",", "I", "S"]
+CONST arr[string] SYMBOLES_2 = ["╭", "╮", "╰", "╯", "─", "│", "▓", "⬢", "⎔", "⌺", "⍵", "✜", "•", "◇", "✦", "░", "⚔", "‧", "▲", "◈"]
 // need to fix in main rl lang
 dec arr[(int,int,int)] FLOOR_COLORS = [(59, 92, 144), (63, 127, 127), (143, 59, 59), (143, 143, 59), (59, 143, 92)]
 
@@ -68,13 +68,16 @@ tag EnemyType {
     Normal,
     Chaser,
     Wanderer,
+    Interceptor,
+    Sentinel,
     Boss
 }
 
 record Enemy {
     int x,
     int y,
-    EnemyType type
+    EnemyType type,
+    int timer
 }
 
 record Target {
@@ -583,17 +586,22 @@ fn spawn_enemies(int max_x, int max_y, int level, arr[(int, int)] walls, arr[(in
         dec int ex = rand_int_range(1, max_x - 2)
         dec int ey = rand_int_range(1, max_y - 2)
         dec int etr = rand_int_range(1, 3)
+        if level >= 3 {
+            etr = rand_int_range(1, 5)
+        }
         dec EnemyType et = EnemyType.Normal
         match etr {
             1 => { et = EnemyType.Normal }
             2 => { et = EnemyType.Chaser }
             3 => { et = EnemyType.Wanderer }
+            4 => { et = EnemyType.Interceptor }
+            5 => { et = EnemyType.Sentinel }
         }
         dec bool on_player = ex == px and ey == py
         dec bool too_close = (ex - px).clamp(-3, 3) == (ex - px) and (ey - py).clamp(-3, 3) == (ey - py)
 
         if !is_wall(walls, ex, ey) and !is_wall(danger, ex, ey) and !on_player and !too_close {
-            enemies = enemies.arr_push(Enemy { x: ex, y: ey, type: et })
+            enemies = enemies.arr_push(Enemy { x: ex, y: ey, type: et, timer: 0 })
             placed = placed + 1
         }
         attempts = attempts + 1
@@ -650,7 +658,7 @@ fn spawn_boss(int max_x, int max_y, arr[(int, int)] walls, int px, int py) -> En
         dec bool far_enough = (adx + ady) >= min_dist
 
         if !is_wall(walls, bx, by) and far_enough {
-            return Enemy { x: bx, y: by, type: EnemyType.Boss }
+            return Enemy { x: bx, y: by, type: EnemyType.Boss, timer: 0 }
         }
 
         bx = rand_int_range(1, max_x - 2)
@@ -658,7 +666,7 @@ fn spawn_boss(int max_x, int max_y, arr[(int, int)] walls, int px, int py) -> En
         attempts = attempts + 1
     }
 
-    return Enemy { x: bx, y: by, type: EnemyType.Boss }
+    return Enemy { x: bx, y: by, type: EnemyType.Boss, timer: 0 }
 }
 
 fn random_step(int x, int y, arr[(int, int)] walls, int max_x, int max_y) -> (int, int) {
@@ -737,7 +745,7 @@ fn chase_step(int x, int y, int px, int py, arr[(int, int)] walls, int max_x, in
 fn move_boss(Enemy boss, arr[(int, int)] walls, int max_x, int max_y, int px, int py) -> Enemy {
     dec int x1, int y1 = chase_step(boss.x, boss.y, px, py, walls, max_x, max_y)
     dec int x2, int y2 = chase_step(x1, y1, px, py, walls, max_x, max_y)
-    return Enemy { x: x2, y: y2, type: EnemyType.Boss }
+    return Enemy { x: x2, y: y2, type: EnemyType.Boss, timer: 0 }
 }
 
 fn move_enemies(arr[Enemy] enemies, arr[(int, int)] walls, int max_x, int max_y, int px, int py) -> arr[Enemy] {
@@ -746,6 +754,7 @@ fn move_enemies(arr[Enemy] enemies, arr[(int, int)] walls, int max_x, int max_y,
     for e in enemies {
         dec int roll = rand_int_range(0, 9)
         dec int nx, int ny = (e.x, e.y)
+        dec int new_timer = e.timer
 
         match e.type {
             EnemyType.Normal => {
@@ -775,9 +784,49 @@ fn move_enemies(arr[Enemy] enemies, arr[(int, int)] walls, int max_x, int max_y,
                 nx = rx
                 ny = ry
             }
+            EnemyType.Interceptor => {
+                if roll < 9 {
+                    dec int cx1, int cy1 = chase_step(e.x, e.y, px, py, walls, max_x, max_y)
+                    dec int cx2, int cy2 = chase_step(cx1, cy1, px, py, walls, max_x, max_y)
+                    nx = cx2
+                    ny = cy2
+                } else {
+                    dec int rx, int ry = random_step(e.x, e.y, walls, max_x, max_y)
+                    nx = rx
+                    ny = ry
+                }
+            }
+            EnemyType.Sentinel => {
+                dec int dx = px - e.x
+                if dx < 0 {
+                    dx = 0 - dx
+                }
+                dec int dy = py - e.y
+                if dy < 0 {
+                    dy = 0 - dy
+                }
+                dec int dist = dx + dy
+                dec int alert = e.timer
+
+                if dist <= 4 {
+                    alert = 5
+                }
+
+                if alert > 0 {
+                    dec int cx, int cy = chase_step(e.x, e.y, px, py, walls, max_x, max_y)
+                    nx = cx
+                    ny = cy
+                    alert = alert - 1
+                } else {
+                    nx = e.x
+                    ny = e.y
+                }
+
+                new_timer = alert
+            }
         }
 
-        moved = moved.arr_push(Enemy { x: nx, y: ny, type: e.type })
+        moved = moved.arr_push(Enemy { x: nx, y: ny, type: e.type, timer: 0 })
     }
 
     return moved
@@ -844,6 +893,8 @@ fn draw_enemies(arr[Enemy] enemies) {
             EnemyType.Normal => { draw_char_bold(e.x, e.y, resolve_symbole(8), "red") }
             EnemyType.Chaser => { draw_char_bold(e.x, e.y, resolve_symbole(9), "red") }
             EnemyType.Wanderer => { draw_char_bold(e.x, e.y, resolve_symbole(10), "red") }
+            EnemyType.Interceptor => { draw_char_bold(e.x, e.y, resolve_symbole(18), "magenta") }
+            EnemyType.Sentinel => { draw_char_bold(e.x, e.y, resolve_symbole(19), "cyan") }
             EnemyType.Boss => { draw_char_boss(e.x, e.y, resolve_symbole(16)) }
         }
     }
