@@ -6,8 +6,23 @@ get arr_range, arr_push, arr_remove, arr_contains, arr_first, arr_last, len from
 get repeat, format, split from std::str
 get mod, clamp from std::math
 get rand_int, rand_int_range from std::random
-get to_string, to_int from std::types
+get to_string, to_int, to_bool from std::types
 get path_exists from std::path
+
+// ---   globals   ---
+
+dec bool texpl = false
+
+// Legend for symbol indices:
+// 0-3: Borders (Top-Left, Top-Right, Bottom-Left, Bottom-Right)
+// 4-5: Lines (Horizontal, Vertical)
+// 6-10: Entities (Wall, Player, Normal Enemy, Chaser Enemy, Wanderer Enemy)
+// 11-14: Items/Hazards (Danger, Pellet, Powerup, Moving Target)
+// 15: Screen Transitions (Sweep)
+CONST arr[string] SYMBOLES_1 = ["┌", "┐", "└", "┘", "─", "│", "#", "@", "E", "C", "e", "x", "o", "!", "*", "█"]
+CONST arr[string] SYMBOLES_2 = ["╭", "╮", "╰", "╯", "─", "│", "▓", "⬢", "⎔", "⌺", "⍵", "✜", "•", "◇", "✦", "░"]
+
+// --- globals end ---
 
 !#[test]
 fn tests() {
@@ -61,8 +76,28 @@ tag GameResult {
 }
 
 // ---- persistence ----
-// single save file: "best,games,wins,losses"
 
+!#[init]
+fn load_conf() {
+    if path_exists("rlchase.conf") {
+        dec string content = read_file("rlchase.conf")?
+        dec arr[string] parts = split(content, ",")
+
+        if parts.len() == 2 {
+            if parts[0] == "smooth" {
+                texpl = parts[1].to_bool()?
+            }
+        }
+    }
+}
+
+!#[final]
+fn save_conf() {
+    dec string line = format("smooth,{}", texpl.to_string()?)
+    write_file("rlchase.conf", line)?
+}
+
+// single save file: "best,games,wins,losses"
 fn load_stats() -> Stats {
     if path_exists("rlchase.save") {
         dec string content = read_file("rlchase.save")?
@@ -119,7 +154,11 @@ fn transition_sweep(int max_x, int max_y) {
             term_move(x, y)
             term_fg("blue")
             term_dim()
-            term_print("█")
+            if !texpl {
+                term_print("█")
+            } else {
+                term_print("░")
+            }
             term_reset_attr()
             term_reset_color()
             y += 1
@@ -133,11 +172,19 @@ fn transition_sweep(int max_x, int max_y) {
 
 // ---- ui helpers ----
 
+fn resolve_symbole(int n) -> string {
+    if texpl {
+        return SYMBOLES_2[n]
+    } else {
+        return SYMBOLES_1[n]
+    }
+}
+
 fn frame_this(string text) -> (arr[string], int) {
     dec int text_len = text.len()
-    dec string upper = format("┌{}┐", "─".repeat(text_len))
-    dec string text = format("│{}│", text)
-    dec string lower = format("└{}┘", "─".repeat(text_len))
+    dec string upper = format("{}{}{}",resolve_symbole(0), resolve_symbole(4).repeat(text_len), resolve_symbole(1))
+    dec string text = format("{}{}{}", resolve_symbole(5), text, resolve_symbole(5))
+    dec string lower = format("{}{}{}", resolve_symbole(2), resolve_symbole(4).repeat(text_len), resolve_symbole(3))
 
     return ([upper, text, lower], text_len)
 }
@@ -186,24 +233,24 @@ fn draw_border(arr[(int, int)] frame, int max_x, int max_y) {
     for point in frame {
         term_move(point[0], point[1])
         if point[0] == 0 and point[1] == 0 {
-            term_print("┌")
+            resolve_symbole(0).term_print()
         } else if point[0] == max_x and point[1] == 0 {
-            term_print("┐")
+            resolve_symbole(1).term_print()
         } else if point[0] == 0 and point[1] == max_y {
-            term_print("└")
+            resolve_symbole(2).term_print()
         } else if point[0] == max_x and point[1] == max_y {
-            term_print("┘")
+            resolve_symbole(3).term_print()
         } else if point[1] == 0 or point[1] == max_y {
-            term_print("─")
+            resolve_symbole(4).term_print()
         } else if point[0] == 0 or point[0] == max_x {
-            term_print("│")
+            resolve_symbole(5).term_print()
         }
     }
     term_reset_attr()
     term_reset_color()
 }
 
-fn draw_main_menu(int max_x, int max_y, Stats stats) -> (arr[int], arr[int]) {
+fn draw_main_menu(int max_x, int max_y, Stats stats) -> (arr[int], arr[int], arr[int]) {
     dec int center_x = max_x / 2
     dec int center_y = max_y / 2
 
@@ -216,10 +263,14 @@ fn draw_main_menu(int max_x, int max_y, Stats stats) -> (arr[int], arr[int]) {
     dec string start = " start "
     dec string exit = " exit  "
     dec string dot = " "
+    dec string settings = " settings  "
+    dec string s1 = " smooth "
 
     dec arr[string] ft_start, int start_len = frame_this(start)
     dec arr[string] ft_exit, int exit_len = frame_this(exit)
     dec arr[string] ft_dot, int dot_len = frame_this(dot)
+    dec arr[string] ft_settings, int settings_len = frame_this(settings)
+    dec arr[string] ft_s1, int s1_len = frame_this(s1)
 
     term_move(center_x - (title_len / 2), center_y - 1)
     term_fg("magenta")
@@ -269,6 +320,30 @@ fn draw_main_menu(int max_x, int max_y, Stats stats) -> (arr[int], arr[int]) {
     term_move(box_exit_x, box_exit_y + 1)
     term_print(ft_dot[2])
 
+    // --- settings ---
+    term_move(center_x + (settings_len + 3), center_y + 4)
+    term_print(ft_settings[0])
+    term_move(center_x + (settings_len + 3), center_y + 5)
+    term_print(ft_settings[1])
+    term_move(center_x + (settings_len + 3), center_y + 6)
+    term_print(ft_settings[2])
+
+    term_move(center_x + (settings_len + 6), center_y + 7)
+    term_print(ft_s1[0])
+    term_move(center_x + (settings_len + 6), center_y + 8)
+    term_print(ft_s1[1])
+    term_move(center_x + (settings_len + 6), center_y + 9)
+    term_print(ft_s1[2])
+    // box
+    dec int box_s1_x = center_x + settings_len + 3
+    dec int box_s1_y = center_y + 8
+    term_move(box_s1_x, box_s1_y - 1)
+    term_print(ft_dot[0])
+    term_move(box_s1_x, box_s1_y)
+    term_print(ft_dot[1])
+    term_move(box_s1_x, box_s1_y + 1)
+    term_print(ft_dot[2])
+
     // legend
     dec string legend = "arrows: move   enter/space: select   ctrl+c: back/quit"
     term_move(center_x - (legend.len() / 2), max_y - 2)
@@ -277,13 +352,15 @@ fn draw_main_menu(int max_x, int max_y, Stats stats) -> (arr[int], arr[int]) {
     term_reset_color()
 
     // in-game legend
-    dec string legend2 = "@ you   E, e, C enemy   x danger   # wall   o pellet   ! freeze   * bonus"
-    term_move(center_x - (legend2.len() / 2), max_y - 1)
+    dec string legend2 = format("{} you   {}, {}, {} enemy   {} danger   {} wall   {} pellet   {} freeze   {} bonus",
+        resolve_symbole(7), resolve_symbole(8), resolve_symbole(9), resolve_symbole(10),
+        resolve_symbole(11), resolve_symbole(6), resolve_symbole(12), resolve_symbole(13), resolve_symbole(14))
+    term_move(center_x - (legend2.len() / 2) + 5, max_y - 1)
     term_fg("white")
     term_print(legend2)
     term_reset_color()
 
-    return ([box_start_x + 1, box_start_y], [box_exit_x + 1, box_exit_y])
+    return ([box_start_x + 1, box_start_y], [box_exit_x + 1, box_exit_y], [box_s1_x + 1, box_s1_y])
 }
 
 // ---- gameplay helpers ----
@@ -601,25 +678,25 @@ fn pellet_index(arr[(int, int)] pellets, int px, int py) -> int {
 
 fn draw_walls(arr[(int, int)] walls) {
     for w in walls {
-        draw_char(w[0], w[1], "#", "white")
+        draw_char(w[0], w[1], resolve_symbole(6), "white")
     }
 }
 
 fn draw_danger(arr[(int, int)] danger) {
     for d in danger {
-        draw_char_bold(d[0], d[1], "x", "red")
+        draw_char_bold(d[0], d[1], resolve_symbole(11), "red")
     }
 }
 
 fn draw_pellets(arr[(int, int)] pellets) {
     for p in pellets {
-        draw_char(p[0], p[1], "o", "green")
+        draw_char(p[0], p[1], resolve_symbole(12), "green")
     }
 }
 
 fn draw_powerups(arr[(int, int)] powerups) {
     for u in powerups {
-        draw_char_bold(u[0], u[1], "!", "yellow")
+        draw_char_bold(u[0], u[1], resolve_symbole(13), "yellow")
     }
 }
 
@@ -632,15 +709,15 @@ fn erase_enemies(arr[Enemy] enemies) {
 fn draw_enemies(arr[Enemy] enemies) {
     for e in enemies {
         match e.type {
-            EnemyType.Normal => { draw_char_bold(e.x, e.y, "E", "red") }
-            EnemyType.Chaser => { draw_char_bold(e.x, e.y, "C", "red") }
-            EnemyType.Wanderer => { draw_char_bold(e.x, e.y, "e", "red") }
+            EnemyType.Normal => { draw_char_bold(e.x, e.y, resolve_symbole(8), "red") }
+            EnemyType.Chaser => { draw_char_bold(e.x, e.y, resolve_symbole(9), "red") }
+            EnemyType.Wanderer => { draw_char_bold(e.x, e.y, resolve_symbole(10), "red") }
         }
     }
 }
 
 fn draw_target(Target t) {
-    draw_char_bold(t.x, t.y, "*", "magenta")
+    draw_char_bold(t.x, t.y, resolve_symbole(14), "magenta")
 }
 
 fn erase_target(Target t) {
@@ -648,7 +725,7 @@ fn erase_target(Target t) {
 }
 
 fn draw_player(int x, int y) {
-    draw_char_bold(x, y, "@", "cyan")
+    draw_char_bold(x, y, resolve_symbole(7), "cyan")
 }
 
 fn draw_hud(int max_x, int max_y, int score, int goal_score, int level, int freeze_timer) {
@@ -853,34 +930,90 @@ fn main() {
     while running {
         term_clear()
         draw_border(frame, max_x, max_y)
-        dec arr[int] start_button, arr[int] exit_button = draw_main_menu(max_x - 2, max_y - 2, stats)
+        dec arr[int] start_button, arr[int] exit_button, arr[int] s1_button = draw_main_menu(max_x - 2, max_y - 2, stats)
 
         dec bool in_menu = true
-        dec int choice = 0
+        dec int choice = 1
+        dec int menu = 1
+        dec int settings_choice = 1
+
+        term_move(s1_button[0], s1_button[1])
+        if texpl {
+            term_print("x")
+        } else {
+            term_print(" ")
+        }
+
         while in_menu {
             dec string key = term_read_key()?
             match key {
                 "Up" => {
                     term_show_cursor()
-                    if choice == 0 or choice == 2 {
+                    if choice == 2 and menu == 1 {
                         term_move(start_button[0], start_button[1])
                         choice = 1
+                    } else if menu == 2 {
+                        term_move(s1_button[0], s1_button[1])
+                        settings_choice = 1
                     }
                 }
 
                 "Down" => {
                     term_show_cursor()
-                    if choice == 0 or choice == 1 {
+                    if choice == 1 and menu == 1 {
                         term_move(exit_button[0], exit_button[1])
                         choice = 2
+                    } else if menu == 2 {
+                        term_move(s1_button[0], s1_button[1])
+                        settings_choice = 1
+                    }
+                }
+
+                "Left" => {
+                    if menu == 1 {
+                        menu = 2
+                        term_move(s1_button[0], s1_button[1])
+                    } else {
+                        menu = 1
+                        if choice == 1 {
+                            term_move(start_button[0], start_button[1])
+                        } else {
+                            term_move(exit_button[0], exit_button[1])
+                        }
+                    }
+                }
+
+                "Right" => {
+                    if menu == 2 {
+                        menu = 1
+                        if choice == 1 {
+                            term_move(start_button[0], start_button[1])
+                        } else {
+                            term_move(exit_button[0], exit_button[1])
+                        }
+                    } else {
+                        menu = 2
+                        term_move(s1_button[0], s1_button[1])
                     }
                 }
 
                 "Char: " => {
-                    if choice == 2 {
+                    if settings_choice == 1 and menu == 2 {
+                        if !texpl {
+                            term_print("x")
+                            texpl = true
+                            term_move(s1_button[0], s1_button[1])
+                        } else {
+                            term_print(" ")
+                            texpl = false
+                            term_move(s1_button[0], s1_button[1])
+                        }
+                    }
+
+                    if (choice == 2) and menu == 1 {
                         running = false
                         in_menu = false
-                    } else if choice == 1 {
+                    } else if (choice == 1) and menu == 1 {
                         in_menu = false
                         transition_sweep(max_x, max_y)
                         dec GameResult gresult = game_loop(frame, max_x, max_y, level)
