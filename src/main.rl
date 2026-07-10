@@ -30,9 +30,16 @@ record Player {
     int score
 }
 
+tag EnemyType {
+    Normal,
+    Chaser,
+    Wanderer
+}
+
 record Enemy {
     int x,
-    int y
+    int y,
+    EnemyType type
 }
 
 record Target {
@@ -270,7 +277,7 @@ fn draw_main_menu(int max_x, int max_y, Stats stats) -> (arr[int], arr[int]) {
     term_reset_color()
 
     // in-game legend
-    dec string legend2 = "@ you   E enemy   x danger   # wall   o pellet   ! freeze   * bonus"
+    dec string legend2 = "@ you   E, e, C enemy   x danger   # wall   o pellet   ! freeze   * bonus"
     term_move(center_x - (legend2.len() / 2), max_y - 1)
     term_fg("white")
     term_print(legend2)
@@ -437,11 +444,18 @@ fn spawn_enemies(int max_x, int max_y, int level, arr[(int, int)] walls, arr[(in
     while placed < enemy_count and attempts < max_attempts {
         dec int ex = rand_int_range(1, max_x - 2)
         dec int ey = rand_int_range(1, max_y - 2)
+        dec int etr = rand_int_range(1, 3)
+        dec EnemyType et = EnemyType.Normal
+        match etr {
+            1 => { et = EnemyType.Normal }
+            2 => { et = EnemyType.Chaser }
+            3 => { et = EnemyType.Wanderer }
+        }
         dec bool on_player = ex == px and ey == py
         dec bool too_close = (ex - px).clamp(-3, 3) == (ex - px) and (ey - py).clamp(-3, 3) == (ey - py)
 
         if !is_wall(walls, ex, ey) and !is_wall(danger, ex, ey) and !on_player and !too_close {
-            enemies = enemies.arr_push(Enemy { x: ex, y: ey })
+            enemies = enemies.arr_push(Enemy { x: ex, y: ey, type: et })
             placed = placed + 1
         }
         attempts = attempts + 1
@@ -530,17 +544,31 @@ fn move_enemies(arr[Enemy] enemies, arr[(int, int)] walls, int max_x, int max_y,
         dec int roll = rand_int_range(0, 9)
         dec int nx, int ny = (e.x, e.y)
 
-        if roll < 7 {
-            dec int cx, int cy = chase_step(e.x, e.y, px, py, walls, max_x, max_y)
-            nx = cx
-            ny = cy
-        } else {
-            dec int rx, int ry = random_step(e.x, e.y, walls, max_x, max_y)
-            nx = rx
-            ny = ry
+        match e.type {
+            EnemyType.Normal => {
+                if roll < 7 {
+                    dec int cx, int cy = chase_step(e.x, e.y, px, py, walls, max_x, max_y)
+                    nx = cx
+                    ny = cy
+                } else {
+                    dec int rx, int ry = random_step(e.x, e.y, walls, max_x, max_y)
+                    nx = rx
+                    ny = ry
+                }
+            }
+            EnemyType.Chaser => {
+                dec int cx, int cy = chase_step(e.x, e.y, px, py, walls, max_x, max_y)
+                nx = cx
+                ny = cy
+            }
+            EnemyType.Wanderer => {
+                dec int rx, int ry = random_step(e.x, e.y, walls, max_x, max_y)
+                nx = rx
+                ny = ry
+            }
         }
 
-        moved = moved.arr_push(Enemy { x: nx, y: ny })
+        moved = moved.arr_push(Enemy { x: nx, y: ny, type: e.type })
     }
 
     return moved
@@ -603,7 +631,11 @@ fn erase_enemies(arr[Enemy] enemies) {
 
 fn draw_enemies(arr[Enemy] enemies) {
     for e in enemies {
-        draw_char_bold(e.x, e.y, "E", "red")
+        match e.type {
+            EnemyType.Normal => { draw_char_bold(e.x, e.y, "E", "red") }
+            EnemyType.Chaser => { draw_char_bold(e.x, e.y, "C", "red") }
+            EnemyType.Wanderer => { draw_char_bold(e.x, e.y, "e", "red") }
+        }
     }
 }
 

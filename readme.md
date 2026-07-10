@@ -41,7 +41,9 @@ Dodge wandering hunters, sidestep death tiles, grab pellets, and hunt down the e
 | Symbol | Meaning |
 |---|---|
 | `@` | You |
-| `E` | Enemy |
+| `E` | Enemy - Normal type |
+| `e` | Enemy - Wanderer type |
+| `C` | Enemy - Chaser type |
 | `x` | Danger tile (instant death) |
 | `#` | Wall |
 | `o` | Pellet (+1 score) |
