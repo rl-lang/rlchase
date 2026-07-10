@@ -3,7 +3,7 @@ get term_print, term_hide_cursor, term_show_cursor, term_poll, term_move, term_f
 get term_enter, term_clear, term_leave, term_read_key, term_move_right, term_move_left, term_move_up, term_move_down from std::term
 get term_bold, term_reset_attr, term_reset_color, term_begin_sync, term_end_sync, term_dim from std::term
 get arr_range, arr_push, arr_remove, arr_contains, arr_first, arr_last, len from std::array
-get repeat, format from std::str
+get repeat, format, split from std::str
 get mod, clamp from std::math
 get rand_int, rand_int_range from std::random
 get to_string, to_int from std::types
@@ -54,31 +54,28 @@ tag GameResult {
 }
 
 // ---- persistence ----
-// each stat lives in its own file so we don't need a string-split helper
-
-fn load_int_file(string path, int default_val) -> int {
-    if path_exists(path) {
-        dec string content = read_file(path)?
-        dec int parsed = content.to_int()?
-        return parsed
-    }
-    return default_val
-}
+// single save file: "best,games,wins,losses"
 
 fn load_stats() -> Stats {
-    dec int best = load_int_file("rlchase_best.txt", 1)
-    dec int games = load_int_file("rlchase_games.txt", 0)
-    dec int wins = load_int_file("rlchase_wins.txt", 0)
-    dec int losses = load_int_file("rlchase_losses.txt", 0)
+    if path_exists("rlchase.save") {
+        dec string content = read_file("rlchase.save")?
+        dec arr[string] parts = split(content, ",")
 
-    return Stats { best_level: best, games: games, wins: wins, losses: losses }
+        if parts.len() == 4 {
+            dec int best = parts[0].to_int()?
+            dec int games = parts[1].to_int()?
+            dec int wins = parts[2].to_int()?
+            dec int losses = parts[3].to_int()?
+            return Stats { best_level: best, games: games, wins: wins, losses: losses }
+        }
+    }
+
+    return Stats { best_level: 1, games: 0, wins: 0, losses: 0 }
 }
 
 fn save_stats(Stats s) {
-    write_file("rlchase_best.txt", s.best_level.to_string()?)?
-    write_file("rlchase_games.txt", s.games.to_string()?)?
-    write_file("rlchase_wins.txt", s.wins.to_string()?)?
-    write_file("rlchase_losses.txt", s.losses.to_string()?)?
+    dec string line = format("{},{},{},{}", s.best_level.to_string()?, s.games.to_string()?, s.wins.to_string()?, s.losses.to_string()?)
+    write_file("rlchase.save", line)?
 }
 
 // ---- color helpers ----
