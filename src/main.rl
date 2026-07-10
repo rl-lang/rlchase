@@ -1,7 +1,7 @@
 get println, read_file, write_file from std::io
 get term_print, term_hide_cursor, term_show_cursor, term_poll, term_move, term_fg, term_bg, term_get_size, term_flush from std::term
 get term_enter, term_clear, term_leave, term_read_key, term_move_right, term_move_left, term_move_up, term_move_down from std::term
-get term_bold, term_reset_attr, term_reset_color, term_begin_sync, term_end_sync, term_dim, term_blink from std::term
+get term_bold, term_reset_attr, term_reset_color, term_begin_sync, term_end_sync, term_dim, term_blink, term_set_fg, term_set_bg from std::term
 get arr_range, arr_push, arr_remove, arr_contains, arr_first, arr_last, len from std::array
 get repeat, format, split from std::str
 get mod, clamp from std::math
@@ -23,6 +23,8 @@ dec bool texpl = false
 // 17: Floor
 CONST arr[string] SYMBOLES_1 = ["┌", "┐", "└", "┘", "─", "│", "#", "@", "E", "C", "e", "x", "o", "!", "*", "█", "☠", ","]
 CONST arr[string] SYMBOLES_2 = ["╭", "╮", "╰", "╯", "─", "│", "▓", "⬢", "⎔", "⌺", "⍵", "✜", "•", "◇", "✦", "░", "⚔", "‧"]
+// need to fix in main rl lang
+dec arr[(int,int,int)] FLOOR_COLORS = [(59, 92, 144), (63, 127, 127), (143, 59, 59), (143, 143, 59), (59, 143, 92)]
 
 fn resolve_symbole(int n) -> string {
     if texpl {
@@ -30,6 +32,14 @@ fn resolve_symbole(int n) -> string {
     } else {
         return SYMBOLES_1[n]
     }
+}
+
+dec int floor_color = 0
+
+!#[init]
+fn randomize_floor_color() {
+    dec int indices = FLOOR_COLORS.len()
+    floor_color = rand_int_range(1, indices) - 1
 }
 // --- globals end ---
 
@@ -154,7 +164,8 @@ fn draw_char_bold(int x, int y, string ch, string color) {
 fn erase_char(int x, int y) {
     term_move(x, y)
     term_dim()
-    term_fg("blue")
+    dec int r, int b, int g = FLOOR_COLORS[floor_color]
+    term_set_fg(r, b, g)
     term_print(resolve_symbole(17)
     term_reset_attr()
     term_reset_color()
@@ -172,7 +183,8 @@ fn draw_char_boss(int x, int y, string ch) {
 
 fn draw_floor(arr[(int, int)] body) {
     term_dim()
-    term_fg("blue")
+    dec int r, int b, int g = FLOOR_COLORS[floor_color]
+    term_set_fg(r, b, g)
     for c in body {
         term_move(c[0], c[1])
         term_print(resolve_symbole(17)
@@ -914,6 +926,7 @@ fn game_loop(arr[(int,int)] frame, int max_x, int max_y, int level) -> GameResul
     dec int moves_survived = 0
 
     term_hide_cursor()
+    randomize_floor_color()
     loading()
     draw_border(frame, max_x, max_y)
     dec arr[(int, int)] frame2, arr[(int,int)] body = get_size(max_x -1, max_y -1)
