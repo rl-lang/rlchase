@@ -4,6 +4,10 @@ A terminal maze-chase game written entirely in [rl-lang](https://github.com/rl-l
 
 Dodge wandering hunters, sidestep death tiles, grab pellets, and hunt down the elusive bonus target before your enemies catch you. Survive long enough and the maze gets meaner.
 
+## Demo
+
+[![asciicast](https://asciinema.org/a/Pmy1Uy3XwZmfG0SW.svg)](https://asciinema.org/a/Pmy1Uy3XwZmfG0SW)
+
 ## Features
 
 - **Procedurally generated levels** - walls, danger tiles, enemies, pellets, and power-ups are randomized every run, with density scaling as you climb levels.
@@ -74,6 +78,7 @@ Delete these files to reset your stats.
 - [ ] Fade-in transition to complement the current fade-out sweep
 - [ ] Retry-without-menu on death
 - [ ] Death-cause messaging (caught vs. stepped on danger tile)
+
 
 ## License
 
