@@ -215,11 +215,7 @@ fn transition_sweep(int max_x, int max_y) {
             term_move(x, y)
             term_fg("blue")
             term_dim()
-            if !texpl {
-                term_print("█")
-            } else {
-                term_print("░")
-            }
+            term_print(resolve_symbole(15))
             term_reset_attr()
             term_reset_color()
             y += 1
