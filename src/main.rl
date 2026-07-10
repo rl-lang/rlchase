@@ -30,6 +30,7 @@ record Player {
 
 tag GameResult {
     Win,
+    Lose,
     Quit
 }
 
@@ -160,35 +161,70 @@ fn draw_main_menu(int max_x, int max_y) -> (arr[int], arr[int]) {
 
 // ---- gameplay helpers ----
 
-fn make_walls(int max_x, int max_y) -> arr[(int, int)] {
-    dec arr[(int, int)] walls = []
-    dec int mid_y = max_y / 2
-
-    dec int i = 4
-    while i < max_x - 4 {
-        if i < max_x / 2 - 2 or i > max_x / 2 + 2 {
-            walls = walls.arr_push((i, mid_y))
-        }
-        i += 1
-    }
-
-    return walls
-}
-
-fn is_wall(arr[(int, int)] walls, int x, int y) -> bool {
-    for w in walls {
-        if w[0] == x and w[1] == y {
+fn is_wall(arr[(int, int)] cells, int x, int y) -> bool {
+    for c in cells {
+        if c[0] == x and c[1] == y {
             return true
         }
     }
     return false
 }
 
-fn spawn_goal(int max_x, int max_y, arr[(int, int)] walls, int px, int py) -> (int, int) {
-    dec int gx = rand_int_range(1, max_x - 1)
-    dec int gy = rand_int_range(1, max_y - 1)
+fn make_walls(int max_x, int max_y, int level) -> arr[(int, int)] {
+    dec arr[(int, int)] walls = []
+    dec int wall_count = 10 + level * 4
+    dec int placed = 0
 
-    while is_wall(walls, gx, gy) or (gx == px and gy == py) {
+    while placed < wall_count {
+        dec int wx = rand_int_range(1, max_x - 2)
+        dec int wy = rand_int_range(1, max_y - 2)
+        dec bool is_center = wx == max_x / 2 and wy == max_y / 2
+
+        if !is_wall(walls, wx, wy) and !is_center {
+            walls = walls.arr_push((wx, wy))
+            placed = placed + 1
+        }
+    }
+
+    return walls
+}
+
+fn make_danger(int max_x, int max_y, int level, arr[(int, int)] walls, int px, int py) -> arr[(int, int)] {
+    dec arr[(int, int)] danger = []
+    dec int danger_count = 3 + level * 2
+    dec int placed = 0
+
+    while placed < danger_count {
+        dec int dx = rand_int_range(1, max_x - 2)
+        dec int dy = rand_int_range(1, max_y - 2)
+        dec bool on_player = dx == px and dy == py
+
+        if !is_wall(walls, dx, dy) and !is_wall(danger, dx, dy) and !on_player {
+            danger = danger.arr_push((dx, dy))
+            placed = placed + 1
+        }
+    }
+
+    return danger
+}
+
+fn find_start_cell(int max_x, int max_y, arr[(int, int)] walls) -> (int, int) {
+    dec int cx = max_x / 2
+    dec int cy = max_y / 2
+
+    while is_wall(walls, cx, cy) {
+        cx = rand_int_range(1, max_x - 1)
+        cy = rand_int_range(1, max_y - 1)
+    }
+
+    return (cx, cy)
+}
+
+fn spawn_goal(int max_x, int max_y, arr[(int, int)] walls, arr[(int, int)] danger, int px, int py) -> (int, int) {
+    dec int gx = rand_int_range(1, max_x - 2)
+    dec int gy = rand_int_range(1, max_y - 2)
+
+    while is_wall(walls, gx, gy) or is_wall(danger, gx, gy) or (gx == px and gy == py) {
         gx = rand_int_range(1, max_x - 1)
         gy = rand_int_range(1, max_y - 1)
     }
@@ -203,32 +239,43 @@ fn draw_walls(arr[(int, int)] walls) {
     }
 }
 
-fn draw_hud(int max_x, int max_y, int score, int goal_score) {
+fn draw_danger(arr[(int, int)] danger) {
+    for d in danger {
+        term_move(d[0], d[1])
+        term_print("x")
+    }
+}
+
+fn draw_hud(int max_x, int max_y, int score, int goal_score, int level) {
     term_move(1, max_y + 1)
-    term_print(format("score: {} / {}   (Ctrl+C to return to menu)   ", score.to_string()?, goal_score.to_string()?))
+    term_print(format("level {}   score: {} / {}   (Ctrl+C to return to menu)   ", level.to_string()?, score.to_string()?, goal_score.to_string()?))
 }
 
 // ---- game loop ----
 
-fn game_loop(arr[(int,int)] frame, int max_x, int max_y) -> GameResult {
-    dec int goal_score = 3
+fn game_loop(arr[(int,int)] frame, int max_x, int max_y, int level) -> GameResult {
+    dec int goal_score = 2 + level
 
     term_clear()
     draw_border(frame, max_x, max_y)
 
-    dec arr[(int, int)] walls = make_walls(max_x, max_y)
+    dec arr[(int, int)] walls = make_walls(max_x, max_y, level)
+    dec int start_x, int start_y = find_start_cell(max_x, max_y, walls)
+    dec arr[(int, int)] danger = make_danger(max_x, max_y, level, walls, start_x, start_y)
+
     draw_walls(walls)
+    draw_danger(danger)
 
     term_hide_cursor()
-    dec Player p = Player { x: max_x / 2, y: max_y / 2, score: 0 }
+    dec Player p = Player { x: start_x, y: start_y, score: 0 }
 
-    dec int goal_x, int goal_y = spawn_goal(max_x, max_y, walls, p.x, p.y)
+    dec int goal_x, int goal_y = spawn_goal(max_x, max_y, walls, danger, p.x, p.y)
 
     term_move(p.x, p.y)
     term_print("@")
     term_move(goal_x, goal_y)
     term_print("*")
-    draw_hud(max_x, max_y, p.score, goal_score)
+    draw_hud(max_x, max_y, p.score, goal_score, level)
 
     while true {
         dec string key = term_read_key()?
@@ -253,6 +300,10 @@ fn game_loop(arr[(int,int)] frame, int max_x, int max_y) -> GameResult {
             term_print("@")
         }
 
+        if is_wall(danger, p.x, p.y) {
+            return GameResult.Lose
+        }
+
         if p.x == goal_x and p.y == goal_y {
             p.score = p.score + 1
 
@@ -260,14 +311,14 @@ fn game_loop(arr[(int,int)] frame, int max_x, int max_y) -> GameResult {
                 return GameResult.Win
             }
 
-            dec int new_goal_x, int new_goal_y = spawn_goal(max_x, max_y, walls, p.x, p.y)
+            dec int new_goal_x, int new_goal_y = spawn_goal(max_x, max_y, walls, danger, p.x, p.y)
             goal_x = new_goal_x
             goal_y = new_goal_y
             term_move(goal_x, goal_y)
             term_print("*")
         }
 
-        draw_hud(max_x, max_y, p.score, goal_score)
+        draw_hud(max_x, max_y, p.score, goal_score, level)
     }
 }
 
@@ -287,6 +338,22 @@ fn show_win_screen(int max_x, int max_y) {
     term_read_key()?
 }
 
+fn show_lose_screen(int max_x, int max_y) {
+    term_clear()
+    dec int center_x = max_x / 2
+    dec int center_y = max_y / 2
+
+    dec arr[string] ft, int msg_len = frame_this(" you died! press any key ")
+    term_move(center_x - (msg_len / 2), center_y - 1)
+    term_print(ft[0])
+    term_move(center_x - (msg_len / 2), center_y)
+    term_print(ft[1])
+    term_move(center_x - (msg_len / 2), center_y + 1)
+    term_print(ft[2])
+
+    term_read_key()?
+}
+
 fn main() {
     dec arr[int] size = term_get_size()?
     dec int max_x, int max_y = (size[0], size[1])
@@ -294,6 +361,8 @@ fn main() {
     dec arr[(int, int)] frame, arr[(int, int)] body = get_size(max_x, max_y)
 
     dec bool running = true
+    dec int level = 1
+
     while running {
         term_clear()
         draw_border(frame, max_x, max_y)
@@ -325,11 +394,15 @@ fn main() {
                         in_menu = false
                     } else if choice == 1 {
                         in_menu = false
-                        dec GameResult gresult = game_loop(frame, max_x, max_y)
+                        dec GameResult gresult = game_loop(frame, max_x, max_y, level)
                         if gresult == GameResult.Win {
+                            level = level + 1
                             show_win_screen(max_x, max_y)
+                        } else if gresult == GameResult.Lose {
+                            level = 1
+                            show_lose_screen(max_x, max_y)
                         }
-                        // Quit or Win both fall back to the menu loop
+                        // Quit falls back to the menu keeping the current level
                     }
                 }
                 "Enter" => {
@@ -338,9 +411,13 @@ fn main() {
                         in_menu = false
                     } else if choice == 1 {
                         in_menu = false
-                        dec GameResult gresult = game_loop(frame, max_x, max_y)
+                        dec GameResult gresult = game_loop(frame, max_x, max_y, level)
                         if gresult == GameResult.Win {
+                            level = level + 1
                             show_win_screen(max_x, max_y)
+                        } else if gresult == GameResult.Lose {
+                            level = 1
+                            show_lose_screen(max_x, max_y)
                         }
                     }
                 }
