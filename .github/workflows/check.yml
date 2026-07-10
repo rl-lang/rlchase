@@ -1,0 +1,25 @@
+name: RL Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  rl-check:
+    name: Check ${{ matrix.file }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        file:
+          - src/main.rl
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run RL check
+        uses: rl-lang/rl-check@main
+        with:
+          file: ${{ matrix.file }}
