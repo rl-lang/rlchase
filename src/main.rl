@@ -830,7 +830,7 @@ fn move_enemies(arr[Enemy] enemies, arr[(int, int)] walls, int max_x, int max_y,
             }
         }
 
-        moved = moved.arr_push(Enemy { x: nx, y: ny, type: e.type, timer: 0 })
+        moved = moved.arr_push(Enemy { x: nx, y: ny, type: e.type, timer: new_timer })
     }
 
     return moved
