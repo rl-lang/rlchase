@@ -5,6 +5,7 @@ get arr_range, arr_push, arr_remove, arr_contains, arr_first, arr_last, len from
 get repeat, format from std::str
 get mod, clamp from std::math
 get rand_int, rand_int_range from std::random
+get to_string from std::types
 
 !#[test]
 fn tests() {
@@ -18,6 +19,21 @@ fn terminal() {
     term_clear()
     term_hide_cursor()
 }
+
+// ---- data types ----
+
+record Player {
+    int x,
+    int y,
+    int score
+}
+
+tag GameResult {
+    Win,
+    Quit
+}
+
+// ---- ui helpers ----
 
 fn frame_this(string text) -> (arr[string], int) {
     dec int text_len = text.len()
@@ -38,17 +54,17 @@ fn loading() {
     dec string loading_msg = " loading ... "
     dec arr[string] ft, int msg_len = frame_this(loading_msg)
 
-    term_move(max_x - (msg_len + 4) ,max_y - 4)
+    term_move(max_x - (msg_len + 4), max_y - 4)
     term_print(ft[0])
-    term_move(max_x - (msg_len + 4) ,max_y - 3)
+    term_move(max_x - (msg_len + 4), max_y - 3)
     term_print(ft[1])
-    term_move(max_x - (msg_len + 4) ,max_y - 2)
+    term_move(max_x - (msg_len + 4), max_y - 2)
     term_print(ft[2])
 }
 
 fn get_size(int max_x, int max_y) -> (arr[(int, int)], arr[(int, int)]) {
     dec arr[int] Xs = arr_range(0, max_x + 1, 1)
-    dec arr[int] Ys = arr_range(0, max_y + 1 , 1)
+    dec arr[int] Ys = arr_range(0, max_y + 1, 1)
 
     dec arr[(int, int)] frame = []
     dec arr[(int, int)] body = []
@@ -142,64 +158,134 @@ fn draw_main_menu(int max_x, int max_y) -> (arr[int], arr[int]) {
     return ([box_start_x + 1, box_start_y], [box_exit_x + 1, box_exit_y])
 }
 
-fn game_loop(arr[(int,int)] frame, int max_x, int max_y) {
+// ---- gameplay helpers ----
+
+fn make_walls(int max_x, int max_y) -> arr[(int, int)] {
+    dec arr[(int, int)] walls = []
+    dec int mid_y = max_y / 2
+
+    dec int i = 4
+    while i < max_x - 4 {
+        if i < max_x / 2 - 2 or i > max_x / 2 + 2 {
+            walls = walls.arr_push((i, mid_y))
+        }
+        i += 1
+    }
+
+    return walls
+}
+
+fn is_wall(arr[(int, int)] walls, int x, int y) -> bool {
+    for w in walls {
+        if w[0] == x and w[1] == y {
+            return true
+        }
+    }
+    return false
+}
+
+fn spawn_goal(int max_x, int max_y, arr[(int, int)] walls, int px, int py) -> (int, int) {
+    dec int gx = rand_int_range(1, max_x - 1)
+    dec int gy = rand_int_range(1, max_y - 1)
+
+    while is_wall(walls, gx, gy) or (gx == px and gy == py) {
+        gx = rand_int_range(1, max_x - 1)
+        gy = rand_int_range(1, max_y - 1)
+    }
+
+    return (gx, gy)
+}
+
+fn draw_walls(arr[(int, int)] walls) {
+    for w in walls {
+        term_move(w[0], w[1])
+        term_print("#")
+    }
+}
+
+fn draw_hud(int max_x, int max_y, int score, int goal_score) {
+    term_move(1, max_y + 1)
+    term_print(format("score: {} / {}   (Ctrl+C to return to menu)   ", score.to_string()?, goal_score.to_string()?))
+}
+
+// ---- game loop ----
+
+fn game_loop(arr[(int,int)] frame, int max_x, int max_y) -> GameResult {
+    dec int goal_score = 3
+
     term_clear()
     draw_border(frame, max_x, max_y)
 
-    term_hide_cursor()
-    dec int x = max_x / 2
-    dec int y = max_y / 2
+    dec arr[(int, int)] walls = make_walls(max_x, max_y)
+    draw_walls(walls)
 
-    term_move(x, y)
+    term_hide_cursor()
+    dec Player p = Player { x: max_x / 2, y: max_y / 2, score: 0 }
+
+    dec int goal_x, int goal_y = spawn_goal(max_x, max_y, walls, p.x, p.y)
+
+    term_move(p.x, p.y)
     term_print("@")
+    term_move(goal_x, goal_y)
+    term_print("*")
+    draw_hud(max_x, max_y, p.score, goal_score)
 
     while true {
         dec string key = term_read_key()?
+        dec int nx = p.x
+        dec int ny = p.y
+
         match key {
-            "Up" => {
-                term_move(x , y)
-                term_print(" ")
-                y -= 1
-                y = y.clamp(1, max_y -1)
-                term_move(x , y )
-                term_print("@")
-            }
-
-            "Down" => {
-                term_move(x, y)
-                term_print(" ")
-                y += 1
-                y = y.clamp(1, max_y -1)
-                term_move(x, y)
-                term_print("@")
-            }
-
-            "Left" => {
-                term_move(x, y)
-                term_print(" ")
-                x -= 1
-                x = x.clamp(1, max_x -1)
-                term_move(x, y)
-                term_print("@")
-            }
-
-            "Right" => {
-                term_move(x, y)
-                term_print(" ")
-                x += 1
-                x = x.clamp(1, max_x -1)
-                term_move(x, y)
-                term_print("@")
-            }
-
-            "Ctrl:c" => {
-                break
-            }
+            "Up" => { ny = (p.y - 1).clamp(1, max_y - 2) }
+            "Down" => { ny = (p.y + 1).clamp(1, max_y - 2) }
+            "Left" => { nx = (p.x - 1).clamp(1, max_x - 2) }
+            "Right" => { nx = (p.x + 1).clamp(1, max_x - 2) }
+            "Ctrl:c" => { return GameResult.Quit }
+            _ => {}
         }
-    }
 
+        if !is_wall(walls, nx, ny) {
+            term_move(p.x, p.y)
+            term_print(" ")
+            p.x = nx
+            p.y = ny
+            term_move(p.x, p.y)
+            term_print("@")
+        }
+
+        if p.x == goal_x and p.y == goal_y {
+            p.score = p.score + 1
+
+            if p.score >= goal_score {
+                return GameResult.Win
+            }
+
+            dec int new_goal_x, int new_goal_y = spawn_goal(max_x, max_y, walls, p.x, p.y)
+            goal_x = new_goal_x
+            goal_y = new_goal_y
+            term_move(goal_x, goal_y)
+            term_print("*")
+        }
+
+        draw_hud(max_x, max_y, p.score, goal_score)
+    }
 }
 
+fn show_win_screen(int max_x, int max_y) {
+    term_clear()
+    dec int center_x = max_x / 2
+    dec int center_y = max_y / 2
+
+    dec arr[string] ft, int msg_len = frame_this(" you win! press any key ")
+    term_move(center_x - (msg_len / 2), center_y - 1)
+    term_print(ft[0])
+    term_move(center_x - (msg_len / 2), center_y)
+    term_print(ft[1])
+    term_move(center_x - (msg_len / 2), center_y + 1)
+    term_print(ft[2])
+
+    term_read_key()?
+}
 
 fn main() {
     dec arr[int] size = term_get_size()?
@@ -207,52 +293,65 @@ fn main() {
 
     dec arr[(int, int)] frame, arr[(int, int)] body = get_size(max_x, max_y)
 
-    term_clear()
-    draw_border(frame, max_x, max_y)
-    dec arr[int] start_button, arr[int] exit_button = draw_main_menu(max_x - 2, max_y - 2)
-
     dec bool running = true
-    dec int choice = 0
     while running {
-        dec string key = term_read_key()?
-        term_show_cursor()
-        match key {
-            "Up" => {
-                if choice == 0 or choice == 2 {
-                    term_move(start_button[0], start_button[1])
-                    choice = 1
-                }
-            }
+        term_clear()
+        draw_border(frame, max_x, max_y)
+        dec arr[int] start_button, arr[int] exit_button = draw_main_menu(max_x - 2, max_y - 2)
 
-            "Down" => {
-                if choice == 0 or choice == 1 {
-                    term_move(exit_button[0], exit_button[1])
-                    choice = 2
+        dec bool in_menu = true
+        dec int choice = 0
+        while in_menu {
+            dec string key = term_read_key()?
+            term_show_cursor()
+            match key {
+                "Up" => {
+                    if choice == 0 or choice == 2 {
+                        term_move(start_button[0], start_button[1])
+                        choice = 1
+                    }
                 }
-            }
 
-            "Char: " => {
-                if choice == 2 {
-                    running = false
-                } else if choice == 1 {
-                    running = false
-                    game_loop(frame, max_x, max_y)
+                "Down" => {
+                    if choice == 0 or choice == 1 {
+                        term_move(exit_button[0], exit_button[1])
+                        choice = 2
+                    }
                 }
-            }
-            "Enter" => {
-                if choice == 2 {
-                    running = false
-                } else if choice == 1 {
-                    running = false
-                    game_loop(frame, max_x, max_y)
+
+                "Char: " => {
+                    if choice == 2 {
+                        running = false
+                        in_menu = false
+                    } else if choice == 1 {
+                        in_menu = false
+                        dec GameResult gresult = game_loop(frame, max_x, max_y)
+                        if gresult == GameResult.Win {
+                            show_win_screen(max_x, max_y)
+                        }
+                        // Quit or Win both fall back to the menu loop
+                    }
                 }
-            }
+                "Enter" => {
+                    if choice == 2 {
+                        running = false
+                        in_menu = false
+                    } else if choice == 1 {
+                        in_menu = false
+                        dec GameResult gresult = game_loop(frame, max_x, max_y)
+                        if gresult == GameResult.Win {
+                            show_win_screen(max_x, max_y)
+                        }
+                    }
+                }
 
-            "Ctrl:c" => {
-                break
-            }
+                "Ctrl:c" => {
+                    running = false
+                    in_menu = false
+                }
 
-            _ => {println(key)}
+                _ => { }
+            }
         }
     }
 }
